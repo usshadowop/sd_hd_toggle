@@ -6,7 +6,7 @@ Pick which ones you want from a menu. Two toggles so far:
 | Toggle | Button | What a click does |
 |---|---|---|
 | **SD / HD** | yellow **HD** or **SD** text | switches every character model between Standard and High Definition |
-| **Music** | yellow musical note, red **X** over it while off | turns the game music on or off |
+| **Music** | yellow musical note, always shown, with a red **X** over it while off | turns the game music on or off |
 
 Every button can be dragged around the minimap ring, and the whole set can be locked or hidden.
 Each toggle also has a key binding and a slash command.

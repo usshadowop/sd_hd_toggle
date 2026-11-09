@@ -5,7 +5,7 @@
 	own music hotkey (Sound_ToggleMusic in Blizzard_SharedXML/Sound.lua) flips exactly that
 	variable, and CVAR_UPDATE fires with its name when it changes anywhere.
 
-	The button shows a yellow musical note; a red X is laid over it while music is off.
+	The button always shows a yellow musical note; a red X is laid over it while music is off.
 ]]
 
 local QT = QuickToggle
@@ -65,11 +65,8 @@ QT:Register({
 		button.cross:SetPoint("CENTER", disc, "CENTER", 0, 0)
 		button.cross:Hide()
 	end,
+	-- The note is always drawn; only the red X comes and goes.
 	Update = function(button, on)
-		local alpha = on and 1 or 0.45
-		button.noteHead:SetAlpha(alpha)
-		button.noteStem:SetAlpha(alpha)
-		button.noteFlag:SetAlpha(alpha)
 		if on then button.cross:Hide() else button.cross:Show() end
 	end,
 	Tooltip = function(tooltip, on)
