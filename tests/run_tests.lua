@@ -37,14 +37,22 @@ Stub.sounds = {}
 
 -- Dragging slides it around the minimap ring: the angle to the cursor is saved.
 local p = { mm:GetPoint(1) }
-check(math.abs(p[4] - 80 * math.cos(math.rad(220))) < 0.01 and math.abs(p[5] - 80 * math.sin(math.rad(220))) < 0.01, "default position is at 220 degrees on the ring")
+local r = 140 / 2 + 5
+check(math.abs(p[4] - r * math.cos(math.rad(220))) < 0.01 and math.abs(p[5] - r * math.sin(math.rad(220))) < 0.01, "default position is at 220 degrees on the ring, half the minimap width + 5 out")
+
+-- Forever's minimap is bigger: the radius follows the live size so the button stays on the outer ring.
+Minimap:SetSize(250, 250)
+p = { mm:GetPoint(1) }
+r = 250 / 2 + 5
+check(math.abs(p[4] - r * math.cos(math.rad(220))) < 0.01 and math.abs(p[5] - r * math.sin(math.rad(220))) < 0.01, "a bigger minimap pushes the button out to its edge")
+check(math.sqrt(p[4] * p[4] + p[5] * p[5]) > 125, "button centre is outside the map disc")
 Stub.cursor.x, Stub.cursor.y = 1000, 700 -- straight above the minimap centre
 mm.scripts.OnDragStart(mm)
 check(mm.scripts.OnUpdate ~= nil, "drag installs an OnUpdate to follow the cursor")
 mm.scripts.OnUpdate(mm, 0.016)
 check(math.abs(SDHDToggleDB.minimapAngle - 90) < 0.01, "angle follows the cursor (90 = top)")
 p = { mm:GetPoint(1) }
-check(math.abs(p[4]) < 0.01 and math.abs(p[5] - 80) < 0.01, "button sits at the top of the ring")
+check(math.abs(p[4]) < 0.01 and math.abs(p[5] - 130) < 0.01, "button sits at the top of the ring")
 mm.scripts.OnDragStop(mm)
 check(mm.scripts.OnUpdate == nil, "drag stop removes the OnUpdate")
 Minimap.effScale = 2

@@ -65,8 +65,11 @@ No event fires when the value changes, so the addon re-reads the getter twice a 
 the label if the Barbershop or the Options menu changed it behind its back.
 
 The minimap button is the standard 31 px round button with Blizzard's `MiniMap-TrackingBorder`
-ring, positioned on a circle of radius 80 around the minimap centre at a saved angle; dragging
-sets the angle from the cursor's direction. It assumes a round minimap.
+ring. It sits on a circle around the minimap centre whose radius is half the minimap's live
+width plus 5 px, so it lands on the outer ring next to the calendar and tracking buttons
+whatever size the minimap is (Forever's is a good deal larger than the Classic 140 px one). The
+saved angle says where on the ring; dragging sets the angle from the cursor's direction, and the
+button follows the minimap if it changes size. It assumes a round minimap.
 
 If the client has no `C_GameRules.SetSDHDToggleValue` (an older build) the label reads `?` and a
 click prints a message instead of erroring. If `IsSDHDToggleEnabled()` is false, the button

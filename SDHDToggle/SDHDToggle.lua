@@ -109,7 +109,18 @@ button:Hide()
 
 -- The minimap button: the usual 31x31 round icon with the tracking-style ring, but with
 -- yellow HD / SD text in the disc instead of an icon. Dragging slides it around the ring.
-local MINIMAP_RADIUS = 80
+-- Distance from the minimap centre to the button centre. Forever's minimap is much bigger
+-- than the old 140 px Classic one, so the radius comes from the live size, not a constant:
+-- half the minimap's width plus a few px puts the button on the outer ring like the
+-- calendar and tracking buttons.
+local RING_PAD = 5
+local function MinimapRadius()
+	local w = Minimap and Minimap.GetWidth and Minimap:GetWidth()
+	if not w or w < 50 then
+		return 80 -- not laid out yet; the classic value until the minimap reports a size
+	end
+	return w / 2 + RING_PAD
+end
 
 local mm = CreateFrame("Button", "SDHDToggleMinimapButton", Minimap or UIParent)
 mm:SetSize(31, 31)
@@ -138,7 +149,15 @@ mm:Hide()
 local function UpdateMinimapPosition()
 	local a = math.rad(db.minimapAngle or DEFAULTS.minimapAngle)
 	mm:ClearAllPoints()
-	mm:SetPoint("CENTER", Minimap or UIParent, "CENTER", math.cos(a) * MINIMAP_RADIUS, math.sin(a) * MINIMAP_RADIUS)
+	local r = MinimapRadius()
+	mm:SetPoint("CENTER", Minimap or UIParent, "CENTER", math.cos(a) * r, math.sin(a) * r)
+end
+
+-- The minimap can change size after we load (edit mode, scale options), so follow it.
+if Minimap and Minimap.HookScript then
+	Minimap:HookScript("OnSizeChanged", function()
+		if db then UpdateMinimapPosition() end
+	end)
 end
 
 local function OnMinimapDrag(self)
@@ -444,6 +463,9 @@ ev:SetScript("OnEvent", function(self, event, arg1)
 		end
 		SDHDToggle.SetShown(db.shown)
 	elseif event == "PLAYER_ENTERING_WORLD" then
-		if db then SDHDToggle.Refresh() end
+		if db then
+			UpdateMinimapPosition()
+			SDHDToggle.Refresh()
+		end
 	end
 end)

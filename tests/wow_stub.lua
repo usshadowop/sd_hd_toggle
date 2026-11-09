@@ -37,8 +37,13 @@ local function newRegion(kind)
 	function r:GetPoint(i) local p = self.points[i or 1]; if p then return p[1], p[2], p[3], p[4], p[5] end end
 	function r:ClearAllPoints() self.points = {} end
 	function r:SetAllPoints() end
-	function r:SetSize(w, h) self.w, self.h = w, h end
+	function r:SetSize(w, h)
+		self.w, self.h = w, h
+		if self.hooks and self.hooks.OnSizeChanged then self.hooks.OnSizeChanged(self, w, h) end
+	end
 	function r:GetSize() return self.w, self.h end
+	function r:GetWidth() return self.w or 0 end
+	function r:HookScript(name, fn) self.hooks = self.hooks or {}; self.hooks[name] = fn end
 	function r:Show() self.shown = true end
 	function r:Hide() self.shown = false end
 	function r:IsShown() return self.shown end
@@ -83,6 +88,7 @@ BackdropTemplateMixin = {}
 UIParent = CreateFrame("Frame", "UIParent")
 Minimap = CreateFrame("Frame", "Minimap", UIParent)
 Minimap.cx, Minimap.cy = 1000, 600
+Minimap:SetSize(140, 140) -- the classic size; Forever's is larger, see the tests
 
 Stub.cursor = { x = 0, y = 0 }
 function GetCursorPosition() return Stub.cursor.x, Stub.cursor.y end
