@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Runs the headless SDHDToggle tests under Lua 5.1 (the game's Lua version).
+"""Runs the headless Quick Toggle tests under Lua 5.1 (the game's Lua version).
 
 Needs either a `lua5.1` binary on PATH or the `lupa` Python package (pip install lupa).
     python3 tests/run.py
@@ -7,7 +7,7 @@ Needs either a `lua5.1` binary on PATH or the `lupa` Python package (pip install
 import os, shutil, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ADDON = os.path.join(os.path.dirname(HERE), "SDHDToggle")
+ADDON = os.path.join(os.path.dirname(HERE), "QuickToggle")
 
 if shutil.which("lua5.1"):
     sys.exit(subprocess.call(["lua5.1", os.path.join(HERE, "run_tests.lua"), HERE, ADDON]))

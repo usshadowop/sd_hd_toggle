@@ -1,6 +1,6 @@
 local here, addonDir = ...
 here = here or "tests"
-addonDir = addonDir or "SDHDToggle"
+addonDir = addonDir or "QuickToggle"
 
 local Stub = dofile(here .. "/wow_stub.lua")
 
@@ -11,165 +11,211 @@ end
 local function eq(a, b, msg)
 	check(a == b, msg .. " (got " .. tostring(a) .. ", want " .. tostring(b) .. ")")
 end
+local function near(a, b, msg) check(math.abs(a - b) < 0.01, msg .. " (got " .. tostring(a) .. ", want " .. tostring(b) .. ")") end
+local function onRing(btn, angleDeg, radius, msg)
+	local p = { btn:GetPoint(1) }
+	check(p[2] == Minimap and math.abs(p[4] - radius * math.cos(math.rad(angleDeg))) < 0.01
+		and math.abs(p[5] - radius * math.sin(math.rad(angleDeg))) < 0.01, msg)
+end
 
-Stub.LoadAddon(addonDir .. "/SDHDToggle.lua", "SDHDToggle")
-local btn = SDHDToggleButton
-local mm = SDHDToggleMinimapButton
+Stub.LoadAddon(addonDir, "QuickToggle")
+local QT = QuickToggle
+local sd = QuickToggle_sdhd_Button
+local mu = QuickToggle_music_Button
 
--- Fresh install: minimap mode, HD active, round button shown with yellow HD text.
-eq(SDHDToggleDB.mode, "minimap", "default display mode is the minimap button")
-eq(mm:IsShown(), true, "minimap button shown on login when the toggle is available")
-eq(btn:IsShown(), false, "floating box hidden in minimap mode")
-eq(mm.text:GetText(), "HD", "minimap label reads HD while HD models are active")
-check(mm.text.color and mm.text.color[1] == 1 and mm.text.color[3] == 0, "minimap label is yellow")
-eq(mm.parent, Minimap, "minimap button is a child of the Minimap")
-check(mm.ring.texture:find("TrackingBorder") ~= nil, "minimap button has the standard ring")
-eq(SDHDToggleDB.shown, true, "saved variables created with defaults")
-
--- Minimap click switches, same as the box.
-mm.scripts.OnClick(mm, "LeftButton")
-eq(Stub.game.sd, true, "minimap click switches the game to SD")
-eq(mm.text:GetText(), "SD", "minimap label follows the switch")
-mm.scripts.OnClick(mm, "LeftButton")
-eq(Stub.game.sd, false, "second minimap click switches back")
-Stub.game.setCalls = {}
-Stub.sounds = {}
-
--- Dragging slides it around the minimap ring: the angle to the cursor is saved.
-local p = { mm:GetPoint(1) }
-local r = 140 / 2 + 5
-check(math.abs(p[4] - r * math.cos(math.rad(220))) < 0.01 and math.abs(p[5] - r * math.sin(math.rad(220))) < 0.01, "default position is at 220 degrees on the ring, half the minimap width + 5 out")
-
--- Forever's minimap is bigger: the radius follows the live size so the button stays on the outer ring.
+-- Load: two toggles registered, both buttons on the minimap ring.
+eq(#QT.toggles, 2, "two toggles registered")
+eq(QT.toggles[1].key, "sdhd", "SD/HD registered first")
+eq(QT.toggles[2].key, "music", "Music registered second")
+eq(sd:IsShown(), true, "SD/HD button shown on login")
+eq(mu:IsShown(), true, "Music button shown on login")
+eq(sd.parent, Minimap, "buttons are children of the Minimap")
+check(sd.ring.texture:find("TrackingBorder") ~= nil, "buttons have the standard minimap ring")
+eq(QuickToggleDB.buttons.sdhd.enabled, true, "SD/HD saved as enabled by default")
+eq(QuickToggleDB.buttons.music.enabled, true, "Music saved as enabled by default")
+onRing(sd, 220, 75, "SD/HD sits at 220 degrees, half the minimap width + 5 out")
+onRing(mu, 200, 75, "Music sits at 200 degrees, next to it")
 Minimap:SetSize(250, 250)
-p = { mm:GetPoint(1) }
-r = 250 / 2 + 5
-check(math.abs(p[4] - r * math.cos(math.rad(220))) < 0.01 and math.abs(p[5] - r * math.sin(math.rad(220))) < 0.01, "a bigger minimap pushes the button out to its edge")
-check(math.sqrt(p[4] * p[4] + p[5] * p[5]) > 125, "button centre is outside the map disc")
-Stub.cursor.x, Stub.cursor.y = 1000, 700 -- straight above the minimap centre
-mm.scripts.OnDragStart(mm)
-check(mm.scripts.OnUpdate ~= nil, "drag installs an OnUpdate to follow the cursor")
-mm.scripts.OnUpdate(mm, 0.016)
-check(math.abs(SDHDToggleDB.minimapAngle - 90) < 0.01, "angle follows the cursor (90 = top)")
-p = { mm:GetPoint(1) }
-check(math.abs(p[4]) < 0.01 and math.abs(p[5] - 130) < 0.01, "button sits at the top of the ring")
-mm.scripts.OnDragStop(mm)
-check(mm.scripts.OnUpdate == nil, "drag stop removes the OnUpdate")
-Minimap.effScale = 2
-Stub.cursor.x, Stub.cursor.y = 2000 + 160, 1200 -- scaled coordinates, straight right
-mm.scripts.OnDragStart(mm); mm.scripts.OnUpdate(mm, 0.016); mm.scripts.OnDragStop(mm)
-check(math.abs(SDHDToggleDB.minimapAngle) < 0.01, "cursor position is divided by the minimap's effective scale")
-Minimap.effScale = nil
-SDHDToggleDB.locked = true
-mm.scripts.OnDragStart(mm)
-check(mm.scripts.OnUpdate == nil, "locked minimap button does not drag")
-SDHDToggleDB.locked = false
+onRing(sd, 220, 130, "a bigger minimap pushes SD/HD out to its edge")
+onRing(mu, 200, 130, "a bigger minimap pushes Music out to its edge")
 
--- Switch to box mode and back.
-Stub.Slash("mode box")
-eq(SDHDToggleDB.mode, "box", "/sdhd mode box saves the mode")
-eq(btn:IsShown(), true, "box shown in box mode")
-eq(mm:IsShown(), false, "minimap button hidden in box mode")
-eq(btn.text:GetText(), "HD", "box label reads HD while HD models are active")
-check(btn.text.color and btn.text.color[1] == 1 and btn.text.color[3] == 0, "box label is yellow")
-Stub.Slash("mode nonsense")
-eq(SDHDToggleDB.mode, "box", "unknown mode is rejected")
-
--- Click flips to SD and tells the client who did it (OptionsMenu = 3).
-btn.scripts.OnClick(btn, "LeftButton")
+-- SD/HD: yellow text label, click flips through C_GameRules.
+eq(sd.label:GetText(), "HD", "SD/HD label reads HD while HD models are active")
+check(sd.label.color[1] == 1 and sd.label.color[3] == 0, "SD/HD label is yellow")
+sd.scripts.OnClick(sd, "LeftButton")
 eq(Stub.game.sd, true, "click switches the game to SD")
-eq(btn.text:GetText(), "SD", "label follows the switch to SD")
-eq(#Stub.game.setCalls, 1, "exactly one SetSDHDToggleValue call per click")
+eq(sd.label:GetText(), "SD", "label follows the switch")
 eq(Stub.game.setCalls[1][2], 3, "reports usage location OptionsMenu")
-check(Stub.LastPrint():find("SD") ~= nil, "announces the switch in chat")
-
--- Click again flips back.
-btn.scripts.OnClick(btn, "LeftButton")
+check(Stub.LastPrint():find("SD %(classic%)") ~= nil, "announces the switch")
+sd.scripts.OnClick(sd, "LeftButton")
 eq(Stub.game.sd, false, "second click switches back to HD")
-eq(btn.text:GetText(), "HD", "label follows the switch back to HD")
-eq(#Stub.sounds, 2, "a sound per switch")
+eq(#Stub.sounds, 2, "a sound per flip")
 
--- Key binding entry point.
-SDHDToggle_Switch()
-eq(Stub.game.sd, true, "key binding switches too")
-eq(btn.text:GetText(), "SD", "label updates from the key binding")
+-- Music: yellow note, red X overlaid while off, drives Sound_EnableMusic.
+check(mu.noteHead and mu.noteStem and mu.noteFlag, "note drawn from head, stem and flag")
+check(mu.noteHead.vcolor[1] == 1 and mu.noteHead.vcolor[3] == 0, "note is yellow")
+check(mu.cross.texture:find("ReadyCheck%-NotReady") ~= nil, "red X uses the ready-check texture")
+eq(mu.cross:IsShown(), false, "no red X while music is on")
+eq(mu.noteHead.alpha, 1, "note at full strength while on")
+mu.scripts.OnClick(mu, "LeftButton")
+eq(Stub.cvars.Sound_EnableMusic, "0", "click turns music off via the cvar")
+eq(mu.cross:IsShown(), true, "red X shown while music is off")
+check(mu.noteHead.alpha < 1, "note dimmed while off")
+check(Stub.LastPrint():find("music off") ~= nil, "announces music off")
+mu.scripts.OnClick(mu, "LeftButton")
+eq(Stub.cvars.Sound_EnableMusic, "1", "second click turns music on")
+eq(mu.cross:IsShown(), false, "red X hidden again")
 
--- Slash commands: explicit targets are idempotent.
-Stub.Slash("sd")
-eq(#Stub.game.setCalls, 3, "/sdhd sd when already SD does not call the client again")
-check(Stub.LastPrint():find("already") ~= nil, "says SD is already active")
-Stub.Slash("hd")
-eq(Stub.game.sd, false, "/sdhd hd switches to HD")
-Stub.Slash("")
-eq(Stub.game.sd, true, "bare /sdhd toggles")
+-- Music changed elsewhere (Blizzard's hotkey, Options): CVAR_UPDATE updates the button at once.
+SetCVar("Sound_EnableMusic", "0")
+eq(mu.cross:IsShown(), true, "external cvar change shows the red X without waiting for the poll")
+SetCVar("Sound_EnableMusic", "1")
+eq(mu.cross:IsShown(), false, "and hides it again")
 
--- The Barbershop (or Options) changes it behind our back: polling picks it up.
+-- SD/HD changed elsewhere: no event exists, the poll catches it.
+Stub.game.sd = true
+Stub.Tick(0.3)
+eq(sd.label:GetText(), "HD", "label unchanged before the poll interval")
+Stub.Tick(0.3)
+eq(sd.label:GetText(), "SD", "label corrected after the poll interval")
 Stub.game.sd = false
-Stub.Tick(0.3)
-eq(btn.text:GetText(), "SD", "label unchanged before the poll interval")
-Stub.Tick(0.3)
-eq(btn.text:GetText(), "HD", "label corrected after the poll interval")
+Stub.Tick(0.6)
 
--- Show / hide, lock, position.
+-- Tooltips.
+mu.scripts.OnEnter(mu)
+check(GameTooltip.lines[1] == "Music" and GameTooltip.lines[2]:find("on") ~= nil, "music tooltip shows the state")
+Stub.cvars.Sound_EnableAllSound = "0"
+mu.scripts.OnEnter(mu)
+check(GameTooltip.lines[#GameTooltip.lines - 1]:find("All sound is off") ~= nil, "music tooltip warns when all sound is off")
+Stub.cvars.Sound_EnableAllSound = "1"
+sd.scripts.OnEnter(sd)
+check(GameTooltip.lines[1] == "SD / HD character models", "SD/HD tooltip titled")
+mu.scripts.OnLeave(mu)
+
+-- Slash commands.
+Stub.Slash("music off")
+eq(Stub.cvars.Sound_EnableMusic, "0", "/qt music off")
+Stub.Slash("music off")
+check(Stub.LastPrint():find("already") ~= nil, "/qt music off twice says already")
+Stub.Slash("music")
+eq(Stub.cvars.Sound_EnableMusic, "1", "bare /qt music flips")
+Stub.Slash("sdhd sd")
+eq(Stub.game.sd, true, "/qt sdhd sd")
+Stub.Slash("sdhd hd")
+eq(Stub.game.sd, false, "/qt sdhd hd")
+Stub.Slash("sdhd purple")
+check(Stub.LastPrint():find("don't know") ~= nil, "unknown value is reported")
+Stub.Slash("bogus")
+check(Stub.LastPrint():find("commands:") ~= nil, "unknown command prints help")
+
+Stub.Slash("disable music")
+eq(mu:IsShown(), false, "/qt disable music hides the button")
+eq(QuickToggleDB.buttons.music.enabled, false, "and saves it")
+eq(sd:IsShown(), true, "SD/HD unaffected")
+Stub.Slash("enable music")
+eq(mu:IsShown(), true, "/qt enable music shows it again")
+Stub.Slash("disable nothing")
+check(Stub.LastPrint():find("no toggle") ~= nil, "disable of unknown toggle is reported")
+
 Stub.Slash("hide")
-eq(btn:IsShown(), false, "/sdhd hide hides the box")
-eq(SDHDToggleDB.shown, false, "hidden state is saved")
-SDHDToggle_ShowHide()
-eq(btn:IsShown(), true, "show/hide binding shows it again")
+eq(sd:IsShown() or mu:IsShown(), false, "/qt hide hides every button")
+Stub.Slash("show")
+eq(sd:IsShown() and mu:IsShown(), true, "/qt show brings them back")
 
-btn.scripts.OnClick(btn, "RightButton")
-eq(SDHDToggleDB.locked, true, "right-click locks the box")
-btn.scripts.OnDragStart(btn)
-eq(btn.moving, nil, "locked box does not move on drag")
-btn.scripts.OnClick(btn, "RightButton")
-eq(SDHDToggleDB.locked, false, "right-click again unlocks")
-btn.scripts.OnDragStart(btn)
-eq(btn.moving, true, "unlocked box moves on drag")
-btn:ClearAllPoints(); btn:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 120, -40)
-btn.scripts.OnDragStop(btn)
-check(SDHDToggleDB.pos and SDHDToggleDB.pos[3] == 120 and SDHDToggleDB.pos[4] == -40, "drag stop saves the position")
-Stub.Slash("reset")
-eq(SDHDToggleDB.pos, nil, "/sdhd reset clears the saved position")
-eq(SDHDToggleDB.minimapAngle, 220, "/sdhd reset also resets the minimap angle")
+local n = #Stub.printed
+Stub.Slash("list")
+eq(#Stub.printed - n, 2, "/qt list prints one line per toggle")
+check(Stub.printed[n + 2]:find("Music") ~= nil and Stub.printed[n + 2]:find("music on") ~= nil, "list shows the music state")
 
-Stub.Slash("scale 1.5")
-eq(SDHDToggleDB.scale, 1.5, "/sdhd scale saves the scale")
-Stub.Slash("scale 9")
-eq(SDHDToggleDB.scale, 1.5, "out-of-range scale is rejected")
-
-Stub.Slash("key F10")
-eq(Stub.bindings["F10"], "SDHDTOGGLE_SWITCH", "/sdhd key binds the switch")
+-- Key bindings.
+QuickToggle_Press("music")
+eq(Stub.cvars.Sound_EnableMusic, "0", "binding flips music")
+QuickToggle_Press("sdhd")
+eq(Stub.game.sd, true, "binding flips SD/HD")
+Stub.Slash("key music F11")
+eq(Stub.bindings["F11"], "QUICKTOGGLE_MUSIC", "/qt key binds the toggle's action")
 eq(Stub.savedBindings, true, "bindings are saved")
-Stub.Slash("status")
-check(Stub.LastPrint():find("F10") ~= nil, "status shows the bound key")
+Stub.Slash("key nothing F12")
+check(Stub.LastPrint():find("usage") ~= nil, "bad key command prints usage")
 
--- Toggle disabled on this realm/account: switch refuses, button hides on login.
+-- Dragging slides each button independently around the ring.
+Stub.cursor.x, Stub.cursor.y = 1000, 800
+mu.scripts.OnDragStart(mu)
+mu.scripts.OnUpdate(mu, 0.016)
+mu.scripts.OnDragStop(mu)
+near(QuickToggleDB.buttons.music.angle, 90, "music drag sets its angle from the cursor (90 = top)")
+eq(QuickToggleDB.buttons.sdhd.angle, 220, "SD/HD angle untouched by the music drag")
+onRing(mu, 90, 130, "music now sits at the top of the ring")
+check(mu.scripts.OnUpdate == nil, "drag stop removes the OnUpdate")
+Stub.Slash("lock")
+sd.scripts.OnDragStart(sd)
+check(sd.scripts.OnUpdate == nil, "locked buttons do not drag")
+Stub.Slash("unlock")
+Stub.Slash("reset")
+eq(QuickToggleDB.buttons.music.angle, 200, "/qt reset puts music back at its default angle")
+
+-- The menu (no MenuUtil in the stub, so the fallback frame is exercised).
+eq(MenuUtil, nil, "stub has no MenuUtil, fallback menu in use")
+sd.scripts.OnClick(sd, "RightButton")
+local menu = QuickToggleMenu
+check(menu and menu:IsShown(), "right-click opens the menu")
+eq(#menu.rows, 2, "one menu row per toggle")
+eq(menu.rows[1].label:GetText(), "SD / HD character models", "row 1 is SD/HD")
+eq(menu.rows[2].label:GetText(), "Music", "row 2 is Music")
+eq(menu.rows[2]:GetChecked(), true, "music row ticked while enabled")
+menu.rows[2]:SetChecked(false)
+menu.rows[2].scripts.OnClick(menu.rows[2])
+eq(mu:IsShown(), false, "unticking Music in the menu hides its button")
+eq(QuickToggleDB.buttons.music.enabled, false, "and saves it")
+menu.rows[2]:SetChecked(true)
+menu.rows[2].scripts.OnClick(menu.rows[2])
+eq(mu:IsShown(), true, "ticking it again shows the button")
+menu.lock:SetChecked(true)
+menu.lock.scripts.OnClick(menu.lock)
+eq(QuickToggleDB.locked, true, "menu lock row locks the buttons")
+menu.lock:SetChecked(false)
+menu.lock.scripts.OnClick(menu.lock)
+QuickToggleDB.buttons.sdhd.angle = 10
+menu.reset.scripts.OnClick(menu.reset)
+eq(QuickToggleDB.buttons.sdhd.angle, 220, "menu reset button resets positions")
+menu.close.scripts.OnClick(menu.close)
+eq(menu:IsShown(), false, "close button hides the menu")
+Stub.Slash("")
+eq(menu:IsShown(), true, "bare /qt opens the menu")
+menu:Hide()
+QuickToggle_Press("menu")
+eq(menu:IsShown(), true, "menu key binding opens the menu")
+menu:Hide()
+
+-- SD/HD switch turned off on this realm: its button hides, the music one stays, menu row says why.
 Stub.game.toggleEnabled = false
 local before = #Stub.game.setCalls
-btn.scripts.OnClick(btn, "LeftButton")
+sd.scripts.OnClick(sd, "LeftButton")
 eq(#Stub.game.setCalls, before, "no client call when the toggle is disabled")
 check(Stub.LastPrint():find("turned off") ~= nil, "explains that the toggle is off")
 Stub.Fire("PLAYER_LOGIN")
-eq(btn:IsShown(), false, "box hidden when the toggle is disabled")
+eq(sd:IsShown(), false, "SD/HD button hidden when the realm disables the switch")
+eq(mu:IsShown(), true, "Music button unaffected")
+QT:OpenMenu()
+check(menu.rows[1].label:GetText():find("turned off") ~= nil, "menu row shows the reason")
+menu:Hide()
 Stub.game.toggleEnabled = true
+QT:Refresh()
+eq(sd:IsShown(), true, "SD/HD button back when the switch is enabled again")
 
--- Client without the API at all (older build): nothing errors, label is "?".
+-- Client without the API at all: nothing errors.
 local saved = C_GameRules
 C_GameRules = nil
-SDHDToggle.Refresh()
-eq(btn.text:GetText(), "?", "label is ? without the API")
-eq(SDHDToggle.Switch(), false, "switch returns false without the API")
-check(Stub.LastPrint():find("missing") ~= nil, "explains the API is missing")
+QT:Refresh()
+eq(sd:IsShown(), false, "SD/HD hidden without the API")
+eq(QT:Press("sdhd"), false, "press returns false without the API")
+check(Stub.LastPrint():find("no SD/HD") ~= nil, "explains the API is missing")
 C_GameRules = saved
+QT:Refresh()
 
--- Hide applies to whichever mode is active.
-Stub.Slash("minimap")
-eq(mm:IsShown(), true, "/sdhd minimap switches back to the minimap button")
-Stub.Slash("hide")
-eq(mm:IsShown(), false, "hide hides the minimap button")
-eq(btn:IsShown(), false, "box stays hidden too")
-Stub.Slash("show")
-eq(mm:IsShown(), true, "show brings the minimap button back")
+-- Unknown toggle key.
+eq(QT:Press("nope"), false, "unknown toggle returns false")
+check(Stub.LastPrint():find("no toggle called") ~= nil, "and says so")
 
 io.write(string.format("%d passed, %d failed\n", passes, failures))
 return failures > 0

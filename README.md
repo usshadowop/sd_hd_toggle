@@ -1,12 +1,15 @@
-# SD/HD Toggle (World of Warcraft: Forever)
+# Quick Toggle (World of Warcraft: Forever)
 
-A round button on the minimap, like most addons have, with yellow text inside that reads **HD**
-or **SD**. Click it and the game switches to the other set of character models. That is the
-whole addon.
+Round buttons on the minimap ring, one per game setting, each flipped with a single click.
+Pick which ones you want from a menu. Two toggles so far:
 
-Drag the button around the minimap ring to put it where you like. If you would rather have a
-free-floating box anywhere on the screen, `/sdhd mode box` gives you that instead. The same
-switch is also on a key binding and a slash command, and the button can be locked or hidden.
+| Toggle | Button | What a click does |
+|---|---|---|
+| **SD / HD** | yellow **HD** or **SD** text | switches every character model between Standard and High Definition |
+| **Music** | yellow musical note, red **X** over it while off | turns the game music on or off |
+
+Every button can be dragged around the minimap ring, and the whole set can be locked or hidden.
+Each toggle also has a key binding and a slash command.
 
 Targets the live Forever client (interface `16001`, build 1.60.1). The API calls were checked
 against Blizzard's UI source for that build (the `forever` branch of `Gethe/wow-ui-source`,
@@ -14,72 +17,74 @@ commit for 1.60.1.70862, Nov 7 2026).
 
 ## Install
 
-1. Copy the `SDHDToggle` folder into
-   `World of Warcraft\_forever_\Interface\AddOns\SDHDToggle`
-   (the folder must be named `SDHDToggle`, the same as the `.toc` file).
+1. Copy the `QuickToggle` folder into
+   `World of Warcraft\_forever_\Interface\AddOns\QuickToggle`
+   (the folder must be named `QuickToggle`, the same as the `.toc` file).
 2. Restart the game or `/reload`.
 
-The round button appears on the lower-left edge of the minimap. Drag it around the ring to
-move it.
+Both buttons appear on the lower-left edge of the minimap. Drag them around the ring to move
+them. If you had the earlier SD/HD Toggle addon installed, delete its `SDHDToggle` folder; this
+replaces it.
 
 ## Use
 
 | Action | What it does |
 |---|---|
-| Left-click the button | switch between SD and HD models |
-| Drag the button | slide it around the minimap ring (or anywhere, in box mode) |
-| Right-click the button | lock it in place (right-click again to unlock) |
-| `/sdhd` | switch |
-| `/sdhd sd`, `/sdhd hd` | switch to a specific one |
-| `/sdhd show`, `/sdhd hide`, `/sdhd button` | show, hide, or toggle the button |
-| `/sdhd mode minimap`, `/sdhd mode box` | round minimap button (default) or a free-floating box |
-| `/sdhd lock`, `/sdhd unlock`, `/sdhd reset` | lock, unlock, or put the button back at the default spot |
-| `/sdhd scale <0.5 - 3>` | resize the box (box mode only) |
-| `/sdhd sound on\|off`, `/sdhd announce on\|off` | the click sound and the chat line on each switch |
-| `/sdhd key <KEY>` | bind a key to the switch, e.g. `/sdhd key F10` |
-| `/sdhd status` | what is active now, and the bound key |
+| Left-click a button | flip that setting |
+| Drag a button | slide it around the minimap ring |
+| Right-click a button, or `/qt` | open the menu: tick the toggles you want as buttons, lock them, reset positions |
+| `/qt music`, `/qt sdhd` | flip a setting from chat |
+| `/qt music on\|off`, `/qt sdhd sd\|hd` | set it to a specific value |
+| `/qt enable <toggle>`, `/qt disable <toggle>` | show or hide one button (same as the menu ticks) |
+| `/qt list` | every toggle, whether its button is on, and the current value |
+| `/qt show`, `/qt hide` | all buttons at once |
+| `/qt lock`, `/qt unlock`, `/qt reset` | lock, unlock, or put the buttons back at their default spots |
+| `/qt sound on\|off`, `/qt announce on\|off` | the click sound and the chat line on each flip |
+| `/qt key <toggle> <KEY>` | bind a key, e.g. `/qt key music F11` |
 
-Key bindings also appear under Options > Keybindings > AddOns as
-"SD/HD Toggle: switch models" and "SD/HD Toggle: show/hide the button".
+Key bindings also appear under Options > Keybindings > AddOns as "Quick Toggle: SD / HD
+models", "Quick Toggle: music on / off" and "Quick Toggle: open the menu".
 
-## How it works
+## How each toggle works
 
-The Forever client exposes the switch to addons on the `C_GameRules` namespace:
+**SD / HD.** The Forever client exposes the switch on `C_GameRules`:
+`IsSDHDToggleEnabled()` says whether the choice is offered on this realm or account,
+`AccountHasSDEnabled()` is `true` while SD models are active, and
+`SetSDHDToggleValue(setToSD, usageLocation)` flips it (`usageLocation` is
+`Enum.SdToggleUsageLocationUI`; we report `OptionsMenu`). Blizzard's own Barbershop checkbox
+(`BarberShopSDToggleMixin`) calls exactly these three from a plain `OnClick`, none is flagged
+`HasRestrictions`, so no hardware event or reload is needed. The value is account wide. No event
+fires when it changes, so the addon re-reads it twice a second and fixes the label if the
+Barbershop or the Options menu changed it.
 
-| Call | Purpose |
-|---|---|
-| `C_GameRules.IsSDHDToggleEnabled()` | whether the choice is offered at all on this realm / account |
-| `C_GameRules.AccountHasSDEnabled()` | `true` while SD models are active |
-| `C_GameRules.SetSDHDToggleValue(setToSD, usageLocation)` | flip it; `usageLocation` is `Enum.SdToggleUsageLocationUI` (`BeforeLogin`, `CharacterCreation`, `BarberShop`, `OptionsMenu`) |
+**Music.** The game keeps this in the `Sound_EnableMusic` console variable (`"1"` / `"0"`).
+Blizzard's own music hotkey (`Sound_ToggleMusic` in `Blizzard_SharedXML/Sound.lua`) flips that
+same variable, so the two stay in step, and `CVAR_UPDATE` fires with its name whenever it
+changes, so the red X appears and disappears at once. If all sound is off in Options the
+tooltip says so, since music will not play either way.
 
-Blizzard's own Barbershop checkbox (`BarberShopSDToggleMixin` in `Blizzard_BarberShopUI.lua`)
-calls exactly these three functions from a plain `OnClick`. None of them is flagged
-`HasRestrictions` in the API documentation, so unlike buying on the auction house, no hardware
-event is needed and no reload follows: the click handler calls the setter and the models change.
-The addon reports itself as `OptionsMenu`, the closest match for an in-world button.
+## Adding a toggle
 
-The value is account wide (the getter is literally "AccountHas..."), so one click changes it for
-every character you log in with, the same as changing it in the Options menu.
+Each toggle is one small file in `QuickToggle/Toggles/`, listed in the `.toc`, that calls
+`QuickToggle:Register{...}` with: a `key` and `name`, `Get` and `Set` for the setting, `Create`
+and `Update` to draw the inside of the button, and optionally `IsAvailable`, `Describe`, `Parse`
+(for `/qt <key> <value>`), `Tooltip`, `events` to re-read on, and `defaultAngle`. Add a
+`QUICKTOGGLE_<KEY>` line to `Bindings.xml` and a `BINDING_NAME_QUICKTOGGLE_<KEY>` string to get a
+key binding. `Toggles/Music.lua` is the smallest example. The core handles the minimap button,
+dragging, the menu entry, polling, the slash command and saved settings.
 
-No event fires when the value changes, so the addon re-reads the getter twice a second and fixes
-the label if the Barbershop or the Options menu changed it behind its back.
-
-The minimap button is the standard 31 px round button with Blizzard's `MiniMap-TrackingBorder`
-ring. It sits on a circle around the minimap centre whose radius is half the minimap's live
-width plus 5 px, so it lands on the outer ring next to the calendar and tracking buttons
-whatever size the minimap is (Forever's is a good deal larger than the Classic 140 px one). The
-saved angle says where on the ring; dragging sets the angle from the cursor's direction, and the
-button follows the minimap if it changes size. It assumes a round minimap.
-
-If the client has no `C_GameRules.SetSDHDToggleValue` (an older build) the label reads `?` and a
-click prints a message instead of erroring. If `IsSDHDToggleEnabled()` is false, the button
-hides itself and `/sdhd` explains why.
+The minimap buttons are the standard 31 px round button with Blizzard's `MiniMap-TrackingBorder`
+ring, placed on a circle of radius half the minimap's live width plus 5 px, so they land on the
+outer ring whatever size the minimap is. The menu uses the client's `MenuUtil.CreateContextMenu`
+when present and a plain frame otherwise. Square-minimap addons are not accounted for; drag the
+buttons to a corner that looks right.
 
 ## Development
 
-`tests/` holds a headless harness that stubs the client, including the three `C_GameRules`
-calls, and drives the addon through minimap click and ring drag, box mode, key, slash commands,
-polling, hide/lock/drag, the toggle-disabled case and the no-API case. Run it with Lua 5.1, the game's Lua version:
+`tests/` holds a headless harness that stubs the client (the three `C_GameRules` calls, console
+variables with `CVAR_UPDATE`, frames, tooltips, bindings) and drives the addon through both
+toggles, external changes, dragging, the menu, slash commands, key bindings, the realm-disabled
+case and the missing-API case. Run it with Lua 5.1, the game's Lua version:
 
 ```bash
 python3 tests/run.py
@@ -89,11 +94,8 @@ It needs `lua5.1` on PATH or `pip install lupa`.
 
 ## Things to verify in game
 
-- Whether the model swap after a click is instant or shows a brief reload of nearby characters.
-  Blizzard's Barbershop refreshes only its preview model after the call; the world refresh is
-  the client's own business.
-- Whether `AccountHasSDEnabled()` reflects the new value on the same frame as the setter. If it
-  lags, the label catches up within half a second from the poll.
-- Whether the realm has the toggle enabled at all. `/sdhd status` tells you.
-- If you use a square-minimap addon, the button follows a circle anyway. Drag it to a corner
-  that looks right, or use `/sdhd mode box`.
+- Whether the model swap after an SD/HD click is instant or shows a brief reload of nearby
+  characters. The addon only calls the setter; the world refresh is the client's business.
+- The musical note is drawn from three textures (round head, stem, angled flag). If the flag
+  looks off on your display, say so and it can be tuned.
+- Whether your realm has the SD/HD switch enabled. `/qt list` tells you.

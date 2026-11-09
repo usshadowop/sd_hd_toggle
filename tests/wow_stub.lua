@@ -1,4 +1,4 @@
--- Minimal stand-in for the WoW Forever client, just enough to load SDHDToggle.lua headless.
+-- Minimal stand-in for the WoW Forever client, just enough to load Quick Toggle headless.
 local Stub = {}
 
 Stub.printed = {}
@@ -27,6 +27,14 @@ C_GameRules = {
 	end,
 }
 
+-- Console variables: Sound_EnableMusic is what the music toggle drives.
+Stub.cvars = { Sound_EnableMusic = "1", Sound_EnableAllSound = "1" }
+function GetCVar(name) return Stub.cvars[name] end
+function SetCVar(name, value)
+	Stub.cvars[name] = tostring(value)
+	Stub.Fire("CVAR_UPDATE", name, tostring(value))
+end
+
 -- Frames -------------------------------------------------------------------
 local function newRegion(kind)
 	local r = { kind = kind, points = {}, shown = true, scripts = {}, text = "" }
@@ -50,6 +58,13 @@ local function newRegion(kind)
 	function r:SetText(t) self.text = t end
 	function r:GetText() return self.text end
 	function r:SetTextColor(...) self.color = { ... } end
+	function r:SetVertexColor(...) self.vcolor = { ... } end
+	function r:SetAlpha(a) self.alpha = a end
+	function r:SetRotation(a) self.rotation = a end
+	function r:SetChecked(b) self.checked = b and true or false end
+	function r:GetChecked() return self.checked end
+	function r:EnableMouse() end
+	function r:SetHeight(h) self.h = h end
 	function r:SetColorTexture(...) self.color = { ... } end
 	function r:SetScale(s) self.scale = s end
 	function r:SetFrameStrata(s) self.strata = s end
@@ -126,19 +141,30 @@ function GetBindingKey(action)
 end
 
 SlashCmdList = {}
+UISpecialFrames = {}
+tinsert = table.insert
 
--- Loads the addon the way the client would: the file is run with the addon name as `...`.
-function Stub.LoadAddon(path, name)
-	local chunk, err = loadfile(path)
-	if not chunk then error(err) end
-	chunk(name)
+-- Loads the addon the way the client would: every file listed in the .toc, in order, each
+-- run with the addon name as `...`, then the login events.
+function Stub.LoadAddon(dir, name)
+	local toc = assert(io.open(dir .. "/" .. name .. ".toc"))
+	for line in toc:lines() do
+		line = line:gsub("\r", "")
+		if line ~= "" and not line:match("^##") then
+			local path = dir .. "/" .. line:gsub("\\", "/")
+			local chunk, err = loadfile(path)
+			if not chunk then error(err) end
+			chunk(name)
+		end
+	end
+	toc:close()
 	Stub.Fire("ADDON_LOADED", name)
 	Stub.Fire("PLAYER_LOGIN")
 	Stub.Fire("PLAYER_ENTERING_WORLD")
 end
 
 function Stub.Slash(msg)
-	SlashCmdList["SDHDTOGGLE"](msg)
+	SlashCmdList["QUICKTOGGLE"](msg)
 end
 
 function Stub.LastPrint() return Stub.printed[#Stub.printed] or "" end
