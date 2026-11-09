@@ -55,6 +55,11 @@ local function newRegion(kind)
 	function r:StartMoving() self.moving = true end
 	function r:StopMovingOrSizing() self.moving = false end
 	function r:SetBackdrop(b) self.backdrop = b end
+	function r:SetTexture(t) self.texture = t end
+	function r:SetHighlightTexture(t) self.highlightTexture = t end
+	function r:SetFrameLevel(l) self.level = l end
+	function r:GetCenter() return self.cx or 0, self.cy or 0 end
+	function r:GetEffectiveScale() return self.effScale or 1 end
 	function r:SetBackdropColor() end
 	function r:SetBackdropBorderColor() end
 	function r:CreateFontString() return newRegion("FontString") end
@@ -76,6 +81,11 @@ function CreateFrame(kind, name, parent, template)
 end
 BackdropTemplateMixin = {}
 UIParent = CreateFrame("Frame", "UIParent")
+Minimap = CreateFrame("Frame", "Minimap", UIParent)
+Minimap.cx, Minimap.cy = 1000, 600
+
+Stub.cursor = { x = 0, y = 0 }
+function GetCursorPosition() return Stub.cursor.x, Stub.cursor.y end
 
 -- Delivers an event to every frame registered for it.
 function Stub.Fire(event, ...)

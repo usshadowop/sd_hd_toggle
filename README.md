@@ -1,10 +1,12 @@
 # SD/HD Toggle (World of Warcraft: Forever)
 
-A small box on your screen with yellow text that reads **HD** or **SD**. Click it and the game
-switches to the other set of character models. That is the whole addon.
+A round button on the minimap, like most addons have, with yellow text inside that reads **HD**
+or **SD**. Click it and the game switches to the other set of character models. That is the
+whole addon.
 
-The same switch is on a key binding and a slash command, and the box can be dragged anywhere,
-locked, scaled or hidden.
+Drag the button around the minimap ring to put it where you like. If you would rather have a
+free-floating box anywhere on the screen, `/sdhd mode box` gives you that instead. The same
+switch is also on a key binding and a slash command, and the button can be locked or hidden.
 
 Targets the live Forever client (interface `16001`, build 1.60.1). The API calls were checked
 against Blizzard's UI source for that build (the `forever` branch of `Gethe/wow-ui-source`,
@@ -17,20 +19,22 @@ commit for 1.60.1.70862, Nov 7 2026).
    (the folder must be named `SDHDToggle`, the same as the `.toc` file).
 2. Restart the game or `/reload`.
 
-The box appears at the top centre of the screen. Drag it where you want it.
+The round button appears on the lower-left edge of the minimap. Drag it around the ring to
+move it.
 
 ## Use
 
 | Action | What it does |
 |---|---|
-| Left-click the box | switch between SD and HD models |
-| Drag the box | move it |
-| Right-click the box | lock it in place (right-click again to unlock) |
+| Left-click the button | switch between SD and HD models |
+| Drag the button | slide it around the minimap ring (or anywhere, in box mode) |
+| Right-click the button | lock it in place (right-click again to unlock) |
 | `/sdhd` | switch |
 | `/sdhd sd`, `/sdhd hd` | switch to a specific one |
-| `/sdhd show`, `/sdhd hide`, `/sdhd button` | show, hide, or toggle the box |
-| `/sdhd lock`, `/sdhd unlock`, `/sdhd reset` | lock, unlock, or put the box back at the default spot |
-| `/sdhd scale <0.5 - 3>` | resize the box |
+| `/sdhd show`, `/sdhd hide`, `/sdhd button` | show, hide, or toggle the button |
+| `/sdhd mode minimap`, `/sdhd mode box` | round minimap button (default) or a free-floating box |
+| `/sdhd lock`, `/sdhd unlock`, `/sdhd reset` | lock, unlock, or put the button back at the default spot |
+| `/sdhd scale <0.5 - 3>` | resize the box (box mode only) |
 | `/sdhd sound on\|off`, `/sdhd announce on\|off` | the click sound and the chat line on each switch |
 | `/sdhd key <KEY>` | bind a key to the switch, e.g. `/sdhd key F10` |
 | `/sdhd status` | what is active now, and the bound key |
@@ -57,18 +61,22 @@ The addon reports itself as `OptionsMenu`, the closest match for an in-world but
 The value is account wide (the getter is literally "AccountHas..."), so one click changes it for
 every character you log in with, the same as changing it in the Options menu.
 
-No event fires when the value changes, so the box re-reads the getter twice a second and fixes
-its label if the Barbershop or the Options menu changed it behind its back.
+No event fires when the value changes, so the addon re-reads the getter twice a second and fixes
+the label if the Barbershop or the Options menu changed it behind its back.
 
-If the client has no `C_GameRules.SetSDHDToggleValue` (an older build) the box reads `?` and a
-click prints a message instead of erroring. If `IsSDHDToggleEnabled()` is false, the box hides
-itself and `/sdhd` explains why.
+The minimap button is the standard 31 px round button with Blizzard's `MiniMap-TrackingBorder`
+ring, positioned on a circle of radius 80 around the minimap centre at a saved angle; dragging
+sets the angle from the cursor's direction. It assumes a round minimap.
+
+If the client has no `C_GameRules.SetSDHDToggleValue` (an older build) the label reads `?` and a
+click prints a message instead of erroring. If `IsSDHDToggleEnabled()` is false, the button
+hides itself and `/sdhd` explains why.
 
 ## Development
 
 `tests/` holds a headless harness that stubs the client, including the three `C_GameRules`
-calls, and drives the addon through click, key, slash commands, polling, hide/lock/drag, the
-toggle-disabled case and the no-API case. Run it with Lua 5.1, the game's Lua version:
+calls, and drives the addon through minimap click and ring drag, box mode, key, slash commands,
+polling, hide/lock/drag, the toggle-disabled case and the no-API case. Run it with Lua 5.1, the game's Lua version:
 
 ```bash
 python3 tests/run.py
@@ -84,3 +92,5 @@ It needs `lua5.1` on PATH or `pip install lupa`.
 - Whether `AccountHasSDEnabled()` reflects the new value on the same frame as the setter. If it
   lags, the label catches up within half a second from the poll.
 - Whether the realm has the toggle enabled at all. `/sdhd status` tells you.
+- If you use a square-minimap addon, the button follows a circle anyway. Drag it to a corner
+  that looks right, or use `/sdhd mode box`.

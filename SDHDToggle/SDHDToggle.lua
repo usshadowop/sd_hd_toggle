@@ -1,7 +1,8 @@
 --[[
 	SD/HD Toggle  -  World of Warcraft: Forever (interface 16001)
 
-	One small button on the screen. Click it and the game switches between Standard
+	A round button on the minimap ring (or, if you prefer, a small box anywhere on the
+	screen) that reads HD or SD. Click it and the game switches between Standard
 	Definition (the original 2004 models) and High Definition character models. The
 	same switch is on a key binding and a slash command.
 
@@ -30,7 +31,9 @@ _G.SDHDToggle = SDHDToggle
 -------------------------------------------------------------------------------
 
 local DEFAULTS = {
-	pos = nil,        -- { point, relPoint, x, y } relative to UIParent
+	mode = "minimap", -- "minimap": round button on the minimap ring; "box": free-floating box
+	minimapAngle = 220, -- degrees around the minimap, 0 = right, 90 = top
+	pos = nil,        -- box mode: { point, relPoint, x, y } relative to UIParent
 	shown = true,
 	locked = false,   -- true = the button cannot be dragged
 	scale = 1,
@@ -104,6 +107,62 @@ button.highlight:SetAllPoints()
 button.highlight:SetColorTexture(1, 1, 1, 0.08)
 button:Hide()
 
+-- The minimap button: the usual 31x31 round icon with the tracking-style ring, but with
+-- yellow HD / SD text in the disc instead of an icon. Dragging slides it around the ring.
+local MINIMAP_RADIUS = 80
+
+local mm = CreateFrame("Button", "SDHDToggleMinimapButton", Minimap or UIParent)
+mm:SetSize(31, 31)
+mm:SetFrameStrata("MEDIUM")
+mm:SetFrameLevel(8)
+mm:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+mm:RegisterForDrag("LeftButton")
+mm:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
+mm.bg = mm:CreateTexture(nil, "BACKGROUND")
+mm.bg:SetSize(21, 21)
+mm.bg:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
+mm.bg:SetPoint("TOPLEFT", 6, -5)
+mm.disc = mm:CreateTexture(nil, "BORDER")
+mm.disc:SetSize(19, 19)
+mm.disc:SetColorTexture(0.05, 0.05, 0.05, 0.9)
+mm.disc:SetPoint("CENTER", mm.bg, "CENTER")
+mm.ring = mm:CreateTexture(nil, "OVERLAY")
+mm.ring:SetSize(53, 53)
+mm.ring:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+mm.ring:SetPoint("TOPLEFT")
+mm.text = mm:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+mm.text:SetPoint("CENTER", mm.bg, "CENTER", 0, 0)
+mm.text:SetTextColor(1, 0.82, 0) -- WoW's yellow
+mm:Hide()
+
+local function UpdateMinimapPosition()
+	local a = math.rad(db.minimapAngle or DEFAULTS.minimapAngle)
+	mm:ClearAllPoints()
+	mm:SetPoint("CENTER", Minimap or UIParent, "CENTER", math.cos(a) * MINIMAP_RADIUS, math.sin(a) * MINIMAP_RADIUS)
+end
+
+local function OnMinimapDrag(self)
+	local parent = Minimap or UIParent
+	local mx, my = parent:GetCenter()
+	local cx, cy = GetCursorPosition()
+	local scale = parent:GetEffectiveScale()
+	if not (mx and cx and scale and scale > 0) then return end
+	cx, cy = cx / scale, cy / scale
+	db.minimapAngle = math.deg(math.atan2(cy - my, cx - mx))
+	UpdateMinimapPosition()
+end
+
+mm:SetScript("OnDragStart", function(self)
+	if db.locked then return end
+	self.dragging = true
+	self:SetScript("OnUpdate", OnMinimapDrag)
+end)
+
+mm:SetScript("OnDragStop", function(self)
+	self.dragging = false
+	self:SetScript("OnUpdate", nil)
+end)
+
 local function SavePosition()
 	local point, _, relPoint, x, y = button:GetPoint(1)
 	if point then
@@ -120,20 +179,26 @@ local function RestorePosition()
 		button:SetPoint("TOP", UIParent, "TOP", 0, -8)
 	end
 	button:SetScale(db.scale or 1)
+	UpdateMinimapPosition()
+end
+
+-- Which of the two frames is the active one, per db.mode.
+local function ActiveFrame()
+	return db.mode == "box" and button or mm
 end
 
 -- The label shows the mode that is active right now; the tooltip says what a click does.
 local lastSeen = nil
 function SDHDToggle.Refresh()
 	local isSD = SDHDToggle.IsSD()
-	if isSD == nil then
-		button.text:SetText("?")
-	else
-		button.text:SetText(isSD and "SD" or "HD")
-	end
+	local label = (isSD == nil) and "?" or (isSD and "SD" or "HD")
+	button.text:SetText(label)
+	mm.text:SetText(label)
 	lastSeen = isSD
-	if GameTooltip and GameTooltip:IsOwned(button) then
-		button:GetScript("OnEnter")(button)
+	if GameTooltip then
+		for _, f in ipairs({ button, mm }) do
+			if GameTooltip:IsOwned(f) then f:GetScript("OnEnter")(f) end
+		end
 	end
 end
 
@@ -167,21 +232,30 @@ end
 
 function SDHDToggle.SetShown(shown)
 	db.shown = shown and true or false
+	button:Hide()
+	mm:Hide()
 	if db.shown and SDHDToggle.IsAvailable() then
-		button:Show()
-	else
-		button:Hide()
+		ActiveFrame():Show()
 	end
 end
 
-button:SetScript("OnClick", function(self, mouseButton)
+function SDHDToggle.SetMode(mode)
+	if mode ~= "minimap" and mode ~= "box" then return false end
+	db.mode = mode
+	SDHDToggle.SetShown(db.shown)
+	return true
+end
+
+local function OnClick(self, mouseButton)
 	if mouseButton == "RightButton" then
 		db.locked = not db.locked
 		Print(db.locked and "button locked in place. Right-click it again to unlock." or "button unlocked, drag it to move.")
 		return
 	end
 	SDHDToggle.Switch()
-end)
+end
+button:SetScript("OnClick", OnClick)
+mm:SetScript("OnClick", OnClick)
 
 button:SetScript("OnDragStart", function(self)
 	if not db.locked then
@@ -194,9 +268,9 @@ button:SetScript("OnDragStop", function(self)
 	SavePosition()
 end)
 
-button:SetScript("OnEnter", function(self)
+local function OnEnter(self)
 	if not GameTooltip then return end
-	GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+	GameTooltip:SetOwner(self, self == mm and "ANCHOR_LEFT" or "ANCHOR_BOTTOM")
 	GameTooltip:ClearLines()
 	GameTooltip:AddLine("SD/HD Toggle")
 	local isSD = SDHDToggle.IsSD()
@@ -209,15 +283,19 @@ button:SetScript("OnEnter", function(self)
 	GameTooltip:AddLine(db.locked and "Right-click to unlock the button." or "Drag to move. Right-click to lock it.", 0.5, 0.5, 0.5)
 	GameTooltip:AddLine("/sdhd for commands", 0.5, 0.5, 0.5)
 	GameTooltip:Show()
-end)
-
-button:SetScript("OnLeave", function()
+end
+local function OnLeave()
 	if GameTooltip then GameTooltip:Hide() end
-end)
+end
+button:SetScript("OnEnter", OnEnter)
+button:SetScript("OnLeave", OnLeave)
+mm:SetScript("OnEnter", OnEnter)
+mm:SetScript("OnLeave", OnLeave)
 
 -- No event fires when the value changes elsewhere (Barbershop, Options menu), so poll.
+local poller = CreateFrame("Frame", "SDHDTogglePoller", UIParent)
 local elapsed = 0
-button:SetScript("OnUpdate", function(self, dt)
+poller:SetScript("OnUpdate", function(self, dt)
 	elapsed = elapsed + dt
 	if elapsed < POLL then return end
 	elapsed = 0
@@ -273,7 +351,7 @@ local function Status()
 		Print("the switch is turned off here. Models: " .. (isSD and "SD" or "HD") .. ".")
 	else
 		Print("models: " .. (isSD and "|cffffffffSD|r (classic)" or "|cffffd100HD|r")
-			.. ". Button " .. (db.shown and "shown" or "hidden") .. (db.locked and ", locked" or "")
+			.. ". Button: " .. db.mode .. ", " .. (db.shown and "shown" or "hidden") .. (db.locked and ", locked" or "")
 			.. ". Key: " .. (GetBindingKey and GetBindingKey("SDHDTOGGLE_SWITCH") or "none") .. ".")
 	end
 end
@@ -302,9 +380,17 @@ SlashCmdList["SDHDTOGGLE"] = function(msg)
 	elseif cmd == "unlock" then
 		db.locked = false
 		Print("button unlocked.")
+	elseif cmd == "mode" or cmd == "minimap" or cmd == "box" then
+		local mode = (cmd == "mode") and rest:lower() or cmd
+		if SDHDToggle.SetMode(mode) then
+			Print(mode == "minimap" and "round button on the minimap." or "free-floating box. Drag it where you want it.")
+		else
+			Print("usage: /sdhd mode minimap|box")
+		end
 	elseif cmd == "reset" then
 		db.pos = nil
 		db.scale = 1
+		db.minimapAngle = DEFAULTS.minimapAngle
 		RestorePosition()
 		SDHDToggle.SetShown(true)
 		Print("button position reset.")
@@ -327,7 +413,7 @@ SlashCmdList["SDHDTOGGLE"] = function(msg)
 	elseif cmd == "status" then
 		Status()
 	else
-		Print("commands: /sdhd (switch), sd, hd, show, hide, button, lock, unlock, reset, scale <n>, sound on|off, announce on|off, key <KEY>, status")
+		Print("commands: /sdhd (switch), sd, hd, show, hide, button, mode minimap|box, lock, unlock, reset, scale <n>, sound on|off, announce on|off, key <KEY>, status")
 	end
 end
 
