@@ -1,0 +1,9 @@
+<Bindings>
+	<!-- Loaded by the client automatically; never list this file in the .toc. -->
+	<Binding name="SDHDTOGGLE_SWITCH" category="ADDONS">
+		SDHDToggle_Switch()
+	</Binding>
+	<Binding name="SDHDTOGGLE_SHOWHIDE" category="ADDONS">
+		SDHDToggle_ShowHide()
+	</Binding>
+</Bindings>

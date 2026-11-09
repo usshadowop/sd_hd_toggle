@@ -1,0 +1,9 @@
+## Interface: 16001
+## Title: SD/HD Toggle
+## Notes: One on-screen button (or key) that switches between Standard Definition and High Definition character models.
+## Author: usshadowop
+## Version: 0.1.0
+## SavedVariables: SDHDToggleDB
+## IconTexture: Interface\Icons\INV_Misc_Gear_01
+
+SDHDToggle.lua
