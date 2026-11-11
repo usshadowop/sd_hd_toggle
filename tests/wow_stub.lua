@@ -39,7 +39,7 @@ end
 
 -- Frames -------------------------------------------------------------------
 local function newRegion(kind)
-	local r = { kind = kind, points = {}, shown = true, scripts = {}, text = "" }
+	local r = { objectType = kind, points = {}, shown = true, scripts = {}, text = "" }
 	function r:SetPoint(point, rel, relPoint, x, y)
 		if type(rel) == "number" then x, y, relPoint, rel = rel, relPoint, point, nil end
 		self.points[#self.points + 1] = { point, rel, relPoint or point, x or 0, y or 0 }
@@ -58,6 +58,13 @@ local function newRegion(kind)
 	function r:Hide() self.shown = false end
 	function r:IsShown() return self.shown end
 	function r:SetText(t) self.text = t end
+	function r:GetStringWidth() return #(self.text or "") * 6 end
+	function r:SetWordWrap() end
+	function r:SetNormalTexture(t) self.normal = newRegion("Texture"); self.normal.texture = t end
+	function r:GetNormalTexture() return self.normal end
+	function r:SetPushedTexture(t) self.pushed = t end
+	function r:SetCheckedTexture(t) self.checkedTex = t end
+	function r:SetDisabledCheckedTexture(t) self.disabledChecked = t end
 	function r:GetText() return self.text end
 	function r:SetTextColor(...) self.color = { ... } end
 	function r:SetVertexColor(...) self.vcolor = { ... } end
@@ -102,6 +109,7 @@ local function newRegion(kind)
 	function r:SetTexture(t) self.texture = t end
 	function r:SetHighlightTexture(t) self.highlightTexture = t end
 	function r:SetFrameLevel(l) self.level = l end
+	function r:GetFrameLevel() return self.level or 1 end
 	function r:GetCenter() return self.cx or 0, self.cy or 0 end
 	function r:GetEffectiveScale() return self.effScale or 1 end
 	function r:SetBackdropColor() end
@@ -166,6 +174,127 @@ end
 
 SlashCmdList = {}
 UISpecialFrames = {}
+
+Stub.combat = false
+function InCombatLockdown() return Stub.combat end
+Stub.shift = false
+function IsShiftKeyDown() return Stub.shift end
+
+-- hooksecurefunc(table, "method", hook): original runs first, then the hook.
+function hooksecurefunc(tbl, name, hook)
+	local orig = tbl[name]
+	tbl[name] = function(...)
+		local a, b, c, d = orig(...)
+		hook(...)
+		return a, b, c, d
+	end
+end
+
+-------------------------------------------------------------------------------
+-- Blizzard's settings system (Blizzard_Settings_Shared), just the parts read
+-------------------------------------------------------------------------------
+
+MinimalSliderWithSteppersMixin = { Label = { Left = 1, Right = 2 } }
+
+-- Every Options row runs this base setup (SettingsControlMixin.Init calls it by name).
+SettingsListElementMixin = {}
+function SettingsListElementMixin.Init(row, initializer)
+	row.data = initializer.data
+end
+Stub.origRowInit = SettingsListElementMixin.Init
+
+Settings = {
+	CommitFlag = { None = 0, ClientRestart = 1, GxRestart = 2, UpdateWindow = 4, SaveBindings = 8,
+		Revertable = 16, Apply = 32, IgnoreApply = 64, KioskProtected = 128, UIReload = 256 },
+}
+Stub.addonSettings = {}   -- variable -> setting registered by an addon
+Stub.valueCallbacks = {}  -- variable -> callback
+Stub.addonCategories = {}
+function Settings.RegisterVerticalLayoutCategory(name)
+	local cat = { name = name, id = 9000 + #Stub.addonCategories, initializers = {} }
+	function cat:GetID() return self.id end
+	function cat:GetName() return self.name end
+	return cat, {}
+end
+function Settings.RegisterAddOnSetting(cat, variable, key, tbl, vtype, name, default)
+	if tbl[key] == nil then tbl[key] = default end
+	local setting = { variable = variable, key = key, tbl = tbl, name = name }
+	function setting:GetValue() return self.tbl[self.key] end
+	function setting:SetValue(v)
+		self.tbl[self.key] = v
+		if Stub.valueCallbacks[variable] then Stub.valueCallbacks[variable](nil, self, v) end
+	end
+	Stub.addonSettings[variable] = setting
+	return setting
+end
+function Settings.CreateCheckbox(cat, setting, tooltip)
+	cat.initializers[#cat.initializers + 1] = { data = { setting = setting, name = setting.name, tooltip = tooltip } }
+end
+function Settings.RegisterAddOnCategory(cat) Stub.addonCategories[#Stub.addonCategories + 1] = cat end
+function Settings.SetOnValueChangedCallback(variable, fn) Stub.valueCallbacks[variable] = fn end
+function Settings.OpenToCategory(id) Stub.openedCategory = id end
+
+-- A CVar-backed setting (CVarSettingMixin): reads and writes Stub.cvars.
+function Stub.CVarSetting(var, vtype, name, opts)
+	opts = opts or {}
+	local s = { variable = var, variableType = vtype, name = name, flags = opts.flags or 0, negate = opts.negate }
+	function s:NegateBoolean() self.negate = true end
+	function s:TransformValue(v) if self.negate then return not v end return v end
+	function s:GetVariable() return self.variable end
+	function s:GetVariableType() return self.variableType end
+	function s:GetName() return self.name end
+	function s:HasCommitFlag(f) return (math.floor(self.flags / f) % 2) == 1 end
+	function s:GetValue()
+		local raw = Stub.cvars[self.variable]
+		if self.variableType == "boolean" then return self:TransformValue(raw ~= nil and raw ~= "0") end
+		if self.variableType == "number" then return tonumber(raw) end
+		return raw
+	end
+	return s
+end
+
+-- A proxy setting (ProxySettingMixin): applies through a Blizzard function.
+Stub.proxyCalls = {}
+function Stub.ProxySetting(var, vtype, name, initial)
+	local s = { variable = var, variableType = vtype, name = name, value = initial, flags = 0 }
+	s.getValue = function() return s.value end
+	s.setValue = function(v) s.value = v end
+	function s:GetVariable() return self.variable end
+	function s:GetVariableType() return self.variableType end
+	function s:GetName() return self.name end
+	function s:HasCommitFlag(f) return false end
+	function s:GetValue() return self.value end
+	function s:SetValue(v, immediate)
+		Stub.proxyCalls[#Stub.proxyCalls + 1] = { self.variable, v, immediate }
+		self.setValue(v)
+	end
+	return s
+end
+
+-- Initializers as Blizzard builds them: .data plus GetIndent.
+function Stub.Init(data, indent)
+	return { data = data, GetIndent = function() return indent or 0 end }
+end
+
+Stub.categories = {}
+function Stub.Category(name, initializers, subs)
+	local cat = { name = name, layout = { inits = initializers }, subs = subs or {} }
+	function cat:GetName() return self.name end
+	function cat:GetSubcategories() return self.subs end
+	function cat.layout:GetInitializers() return self.inits end
+	return cat
+end
+SettingsPanel = {}
+function SettingsPanel:GetAllCategories() return Stub.categories end
+function SettingsPanel:GetLayout(cat) return cat.layout end
+
+-- Builds the row frame Blizzard would show for `init` and runs its setup.
+function Stub.ShowRow(init)
+	local row = CreateFrame("Frame", nil, UIParent)
+	SettingsListElementMixin.Init(row, init)
+	return row
+end
+
 tinsert = table.insert
 
 -- Loads the addon the way the client would: every file listed in the .toc, in order, each
