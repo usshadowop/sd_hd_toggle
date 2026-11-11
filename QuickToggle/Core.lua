@@ -2,7 +2,7 @@
 	Quick Toggle  -  World of Warcraft: Forever (interface 16001)
 
 	A set of round minimap buttons, one per game setting, each flipped with a single click,
-	plus a small panel of sliders (brightness, contrast) with an undo button each. Which
+	plus a small panel of sliders (brightness, contrast, gamma) with an undo button each. Which
 	buttons and sliders you want is chosen from a menu: right-click any button, any part of
 	the slider panel, or type /qt.
 
@@ -525,8 +525,8 @@ local function List()
 	for _, def in ipairs(QT.sliders) do
 		local ok, reason = QT:Available(def)
 		local s = QT:Settings(def.key)
-		Print(string.format("%s  (/qt %s <%d-%d>|undo)  slider %s  now: %s%s%s",
-			def.name, def.key, def.min, def.max,
+		Print(string.format("%s  (/qt %s <%s>|undo)  slider %s  now: %s%s%s",
+			def.name, def.key, def.rangeText,
 			s.enabled and "on" or "off",
 			ok and def.Format(def.Get()) or "n/a",
 			(ok and s.revert) and ("  undo to " .. def.Format(s.revert)) or "",
@@ -595,7 +595,7 @@ SlashCmdList["QUICKTOGGLE"] = function(msg)
 		local t, k = rest:match("^(%S+)%s+(%S+)$")
 		BindKey(t and t:lower(), k)
 	else
-		Print("commands: /qt (menu), /qt <toggle> [value], /qt brightness|contrast <0-100>|undo, enable|disable <name>, list, show, hide, lock, unlock, reset, sound on|off, announce on|off, key <toggle> <KEY>")
+		Print("commands: /qt (menu), /qt <toggle> [value], /qt brightness|contrast|gamma <value>|undo, enable|disable <name>, list, show, hide, lock, unlock, reset, sound on|off, announce on|off, key <toggle> <KEY>")
 	end
 end
 

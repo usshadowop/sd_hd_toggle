@@ -17,6 +17,7 @@ Sliders, in one small panel that sits under the minimap by default:
 |---|---|
 | **Brightness** | the game's brightness, 0 to 100%, same as Options > Graphics |
 | **Contrast** | the game's contrast, 0 to 100%, same as Options > Graphics |
+| **Gamma** | the game's gamma, 0.3 to 2.8 in steps of 0.1 (default 1.0), same as Options > Graphics. Brightens shadows and midtones without washing out highlights as much as brightness does |
 
 Each slider row has an **undo** button. It remembers where the setting was before you first
 moved the slider and puts it back with one click. Several adjustments in a row still undo to
@@ -50,8 +51,8 @@ replaces it.
 | Right-click a button, the slider panel, a slider or an undo button, or `/qt` | open the menu: tick the buttons and sliders you want, lock them, reset positions |
 | Drag a slider, click along it, or roll the mouse wheel over it | change that setting |
 | Click a slider's undo button | put the setting back where it was before you moved the slider |
-| `/qt brightness 60`, `/qt contrast 45` | set a slider value from chat (also undoable) |
-| `/qt brightness undo`, `/qt contrast undo` | undo from chat |
+| `/qt brightness 60`, `/qt contrast 45`, `/qt gamma 1.2` | set a slider value from chat (also undoable) |
+| `/qt brightness undo`, `/qt contrast undo`, `/qt gamma undo` | undo from chat |
 | `/qt music`, `/qt sdhd` | flip a setting from chat |
 | `/qt music on\|off`, `/qt sdhd sd\|hd` | set it to a specific value |
 | `/qt enable <name>`, `/qt disable <name>` | show or hide one button or slider, e.g. `/qt disable contrast` (same as the menu ticks) |
@@ -82,10 +83,12 @@ same variable, so the two stay in step, and `CVAR_UPDATE` fires with its name wh
 changes, so the red X appears and disappears at once. If all sound is off in Options the
 tooltip says so, since music will not play either way.
 
-**Brightness and Contrast.** Both are console variables (`Brightness`, `Contrast`) that
-Blizzard's Options > Graphics page drives with a 0 to 100 slider in steps of 1
-(`Settings.SetupCVarSlider` in `Blizzard_SettingsDefinitions_Shared/Graphics.lua`, which
-loads on Forever). The game default for both is 50%. The addon writes the same variables, then
+**Brightness, Contrast and Gamma.** All three are console variables (`Brightness`,
+`Contrast`, `Gamma`) that Blizzard's Options > Graphics page drives with
+`Settings.SetupCVarSlider` in `Blizzard_SettingsDefinitions_Shared/Graphics.lua`, which loads on
+Forever. Brightness and contrast run 0 to 100 in steps of 1 with a default of 50%; gamma runs
+0.3 to 2.8 in steps of 0.1 with a default of 1.0, and is shown to one decimal like Blizzard
+shows it. The addon writes the same variables, then
 reads them back; if the game refuses a change it says so once and the slider snaps back to the
 real value. `CVAR_UPDATE` keeps the sliders in step when the value is changed in Options.
 
@@ -101,7 +104,8 @@ dragging, the menu entry, polling, the slash command and saved settings.
 
 A slider is even shorter: one `QuickToggle:RegisterSlider{ key, name, cvar, min, max, step }`
 call in a file under `QuickToggle/Sliders/`, listed in the `.toc`. `Sliders/Display.lua`
-declares both brightness and contrast. The panel, undo button, menu entry, `/qt <key>` command
+declares brightness, contrast and gamma; gamma shows how to give a slider a fractional step and
+its own `Format`. The panel, undo button, menu entry, `/qt <key>` command
 and syncing come from `Sliders.lua`.
 
 The minimap buttons are the standard 31 px round button with Blizzard's `MiniMap-TrackingBorder`
@@ -114,7 +118,7 @@ buttons to a corner that looks right.
 
 `tests/` holds a headless harness that stubs the client (the three `C_GameRules` calls, console
 variables with `CVAR_UPDATE`, frames, tooltips, bindings) and drives the addon through both
-toggles, both sliders with undo, external changes, dragging, right-click from every element,
+toggles, all three sliders with undo (including gamma's 0.1 steps), external changes, dragging, right-click from every element,
 the menu, slash commands, key bindings, a refused setting, the realm-disabled case and the
 missing-API case. Run it with Lua 5.1, the game's Lua version:
 
@@ -131,6 +135,6 @@ It needs `lua5.1` on PATH or `pip install lupa`.
 - The musical note is drawn from three textures (round head, stem, angled flag). If the flag
   looks off on your display, say so and it can be tuned.
 - Whether your realm has the SD/HD switch enabled. `/qt list` tells you.
-- Brightness and contrast are applied by the game the same way the Options sliders apply them.
+- Brightness, contrast and gamma are applied by the game the same way the Options sliders apply them.
   If the game ever refuses them from an addon, the panel prints "the game did not accept the
   change" once; tell me and I'll look at it.

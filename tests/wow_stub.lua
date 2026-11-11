@@ -28,7 +28,7 @@ C_GameRules = {
 }
 
 -- Console variables: Sound_EnableMusic is what the music toggle drives.
-Stub.cvars = { Sound_EnableMusic = "1", Sound_EnableAllSound = "1", Brightness = "50", Contrast = "50" }
+Stub.cvars = { Sound_EnableMusic = "1", Sound_EnableAllSound = "1", Brightness = "50", Contrast = "50", Gamma = "1.000000" }
 Stub.lockedCVars = {} -- names SetCVar should refuse, to test the "did not accept" path
 function GetCVar(name) return Stub.cvars[name] end
 function SetCVar(name, value)

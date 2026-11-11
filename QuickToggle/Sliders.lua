@@ -13,6 +13,8 @@
 	* Right-click anywhere on the panel (a label, a slider, an undo button) to open the
 	  Quick Toggle menu, the same one the minimap buttons open.
 	* The panel follows the game: if the setting is changed in Options it moves to match.
+	* Brightness and contrast are percentages in whole steps; gamma is a plain number in
+	  0.1 steps. Clamp and Same keep fractional steps exact.
 
 	Each slider is declared in Sliders/<name>.lua with QuickToggle:RegisterSlider.
 ]]
@@ -27,6 +29,25 @@ local VALUE_W = 38
 local UNDO_W = 20
 local PANEL_W = PAD + LABEL_W + 4 + SLIDER_W + 6 + VALUE_W + 2 + UNDO_W + PAD
 
+-- Snaps to the step and range. The round-trip through %.4f strips float noise such as
+-- 1.2000000000000002 from fractional steps (gamma moves in 0.1s).
+local function Clamp(def, v)
+	v = math.floor((v - def.min) / def.step + 0.5) * def.step + def.min
+	if v < def.min then v = def.min end
+	if v > def.max then v = def.max end
+	return tonumber(string.format("%.4f", v))
+end
+
+local function Same(a, b)
+	return a ~= nil and b ~= nil and math.abs(a - b) < 0.001
+end
+
+-- "0" for whole numbers, "0.3" otherwise: for ranges in usage lines and /qt list.
+local function Num(v)
+	if v == math.floor(v) then return string.format("%d", v) end
+	return (string.format("%.2f", v):gsub("0+$", ""))
+end
+
 --[[
 	def = {
 		key = "brightness",          -- saved variables and /qt <key>
@@ -34,7 +55,7 @@ local PANEL_W = PAD + LABEL_W + 4 + SLIDER_W + 6 + VALUE_W + 2 + UNDO_W + PAD
 		cvar = "Brightness",         -- the console variable it drives
 		min = 0, max = 100, step = 1,
 		defaultEnabled = true,
-		Format = function(v) return "50%" end,   -- optional, default "%d%%"
+		Format = function(v) return "50%" end,   -- optional, default "%d%%"; gamma uses "%.1f"
 		IsAvailable = function() return ok, reason end, -- optional, default: the cvar exists
 		events = { "CVAR_UPDATE" },  -- optional, default as shown
 	}
@@ -44,6 +65,7 @@ function QT:RegisterSlider(def)
 	assert(not self.sliderByKey[def.key] and not self.byKey[def.key], "Quick Toggle: duplicate key " .. tostring(def.key))
 	if def.defaultEnabled == nil then def.defaultEnabled = true end
 	def.step = def.step or 1
+	def.rangeText = Num(def.min) .. "-" .. Num(def.max)
 	def.events = def.events or { "CVAR_UPDATE" }
 	def.Format = def.Format or function(v)
 		if v == nil then return "?" end
@@ -63,19 +85,12 @@ function QT:RegisterSlider(def)
 	if self.panel then self:SetupSliders() end
 end
 
-local function Clamp(def, v)
-	v = math.floor((v - def.min) / def.step + 0.5) * def.step + def.min
-	if v < def.min then v = def.min end
-	if v > def.max then v = def.max end
-	return v
-end
-
 -- Writes the cvar and checks the game took it. Returns true on success.
 local warned = {}
 local function Write(def, v)
 	local ok = pcall(SetCVar, def.cvar, tostring(v))
 	local now = def.Get()
-	if ok and now ~= nil and math.abs(now - v) < 0.001 then
+	if ok and Same(now, v) then
 		return true
 	end
 	if not warned[def.key] then
@@ -200,13 +215,13 @@ local function OnSliderChanged(sl, value)
 	local def = sl.def
 	value = Clamp(def, value)
 	local cur = def.Get()
-	if cur == nil or math.abs(cur - value) < 0.001 then return end
+	if cur == nil or Same(cur, value) then return end
 	local s = QT:Settings(def.key)
 	local revert = s.revert
 	if revert == nil then revert = cur end
 	if Write(def, value) then
 		-- Sliding back onto the undo point means there is nothing left to undo.
-		if math.abs(revert - value) < 0.001 then revert = nil end
+		if Same(revert, value) then revert = nil end
 		s.revert = revert
 	end
 	UpdateRow(sl.row)
@@ -244,10 +259,10 @@ function QT:SetSlider(key, value)
 	else
 		local cur = def.Get()
 		value = Clamp(def, value)
-		if cur ~= value then
+		if not Same(cur, value) then
 			local s = self:Settings(key)
 			local revert = (s.revert == nil) and cur or s.revert
-			if Write(def, value) then s.revert = (revert ~= value) and revert or nil end
+			if Write(def, value) then s.revert = (not Same(revert, value)) and revert or nil end
 		end
 	end
 	return true
@@ -265,7 +280,7 @@ function QT:SliderCommand(key, rest)
 	else
 		local n = tonumber((rest:gsub("%%", "")))
 		if not n or n < def.min or n > def.max then
-			self.Print(string.format("usage: /qt %s <%d-%d> or /qt %s undo", key, def.min, def.max, key))
+			self.Print(string.format("usage: /qt %s <%s> or /qt %s undo", key, def.rangeText, key))
 			return
 		end
 		if self:SetSlider(key, n) and self:DB().announce then
@@ -381,7 +396,7 @@ function QT:SyncSliders()
 	if not panel or not panel:IsShown() then return end
 	for _, def in ipairs(self.sliders) do
 		local row = panel.rows[def.key]
-		if row and row.slider:IsShown() and def.Get() ~= row.last then
+		if row and row.slider:IsShown() and not Same(def.Get(), row.last) then
 			UpdateRow(row)
 		end
 	end

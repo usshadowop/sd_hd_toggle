@@ -123,7 +123,7 @@ eq(sd:IsShown() and mu:IsShown(), true, "/qt show brings them back")
 
 local n = #Stub.printed
 Stub.Slash("list")
-eq(#Stub.printed - n, 4, "/qt list prints one line per button and slider")
+eq(#Stub.printed - n, 5, "/qt list prints one line per button and slider")
 check(Stub.printed[n + 2]:find("Music") ~= nil and Stub.printed[n + 2]:find("music on") ~= nil, "list shows the music state")
 
 -- Key bindings.
@@ -158,7 +158,7 @@ eq(MenuUtil, nil, "stub has no MenuUtil, fallback menu in use")
 sd.scripts.OnClick(sd, "RightButton")
 local menu = QuickToggleMenu
 check(menu and menu:IsShown(), "right-click opens the menu")
-eq(#menu.rows, 4, "one menu row per button and slider")
+eq(#menu.rows, 5, "one menu row per button and slider")
 eq(menu.rows[1].label:GetText(), "SD / HD character models", "row 1 is SD/HD")
 eq(menu.rows[2].label:GetText(), "Music", "row 2 is Music")
 eq(menu.rows[2]:GetChecked(), true, "music row ticked while enabled")
@@ -226,7 +226,7 @@ local cs = QuickToggle_contrast_Slider
 local cu = QuickToggle_contrast_Undo
 local brow = QT.panel.rows.brightness
 
-eq(#QT.sliders, 2, "two sliders registered")
+eq(#QT.sliders, 3, "three sliders registered")
 eq(panel:IsShown(), true, "slider panel shown on login")
 eq(bs:IsShown() and cs:IsShown(), true, "both slider rows shown")
 eq(bs.minV .. "-" .. bs.maxV .. "/" .. bs.step, "0-100/1", "brightness uses Blizzard's 0-100 range in steps of 1")
@@ -309,7 +309,7 @@ eq(menu:IsShown(), false, "left-click on a slider does not open the menu")
 
 -- The menu lists sliders in their own section and can turn each off.
 QT:OpenMenu(panel)
-eq(#menu.rows >= 4, true, "menu has rows for 2 buttons and 2 sliders")
+eq(#menu.rows >= 5, true, "menu has rows for 2 buttons and 3 sliders")
 eq(menu.rows[3].label:GetText(), "Brightness", "row 3 is the brightness slider")
 eq(menu.rows[4].label:GetText(), "Contrast", "row 4 is the contrast slider")
 eq(menu.headers[1]:GetText(), "Minimap buttons", "buttons section header")
@@ -323,12 +323,17 @@ eq(panel:IsShown(), true, "panel stays while one slider is left")
 local oneRow = panel.h
 menu.rows[4]:SetChecked(false)
 menu.rows[4].scripts.OnClick(menu.rows[4])
+eq(panel:IsShown(), true, "panel stays while gamma is left")
+menu.rows[5]:SetChecked(false)
+menu.rows[5].scripts.OnClick(menu.rows[5])
 eq(panel:IsShown(), false, "panel hides when no slider is enabled")
 menu.rows[3]:SetChecked(true)
 menu.rows[3].scripts.OnClick(menu.rows[3])
 menu.rows[4]:SetChecked(true)
 menu.rows[4].scripts.OnClick(menu.rows[4])
-eq(panel:IsShown(), true, "panel back with both sliders")
+menu.rows[5]:SetChecked(true)
+menu.rows[5].scripts.OnClick(menu.rows[5])
+eq(panel:IsShown(), true, "panel back with all sliders")
 check(panel.h > oneRow, "panel grows with a second row")
 local p1 = { cs:GetPoint(1) }
 check(p1[5] < -10, "contrast row sits below brightness when both are on")
@@ -377,7 +382,7 @@ Stub.Slash("enable contrast")
 eq(cs:IsShown(), true, "/qt enable contrast shows it")
 local n0 = #Stub.printed
 Stub.Slash("list")
-eq(#Stub.printed - n0, 4, "/qt list covers 2 buttons and 2 sliders")
+eq(#Stub.printed - n0, 5, "/qt list covers 2 buttons and 3 sliders")
 check(Stub.printed[n0 + 3]:find("Brightness") and Stub.printed[n0 + 3]:find("now: 50%%"), "list shows the brightness value")
 
 -- Tooltips.
@@ -414,6 +419,62 @@ menu:Hide()
 Stub.cvars.Brightness = "50"
 QT:RefreshSliders()
 eq(bs:IsShown(), true, "row back when the cvar exists")
+
+-- Gamma: a plain number in 0.1 steps from 0.3 to 2.8.
+local gs = QuickToggle_gamma_Slider
+local gu = QuickToggle_gamma_Undo
+local grow = QT.panel.rows.gamma
+eq(gs:IsShown(), true, "gamma row shown")
+eq(grow.label:GetText(), "Gamma", "gamma row labelled")
+eq(gs.minV .. "-" .. gs.maxV .. "/" .. gs.step, "0.3-2.8/0.1", "gamma uses Blizzard's 0.3-2.8 range in steps of 0.1")
+eq(gs:GetValue(), 1, "gamma slider starts at the game's 1.0")
+eq(grow.value:GetText(), "1.0", "gamma shown to one decimal, not as a percentage")
+local gp = { gs:GetPoint(1) }
+local cp = { cs:GetPoint(1) }
+check(gp[5] < cp[5], "gamma row sits below contrast")
+gs:SetValue(1.2)
+eq(Stub.cvars.Gamma, "1.2", "gamma written without float noise")
+eq(grow.value:GetText(), "1.2", "value text 1.2")
+eq(QuickToggleDB.sliders.gamma.revert, 1, "gamma undo point is 1.0")
+gs.scripts.OnMouseWheel(gs, 1)
+eq(Stub.cvars.Gamma, "1.3", "mouse wheel steps gamma by 0.1")
+gs.scripts.OnMouseWheel(gs, -1)
+gs.scripts.OnMouseWheel(gs, -1)
+eq(Stub.cvars.Gamma, "1.1", "wheel down twice")
+gs.scripts.OnValueChanged(gs, 1.234)
+eq(Stub.cvars.Gamma, "1.2", "fractional input snaps to 0.1")
+gs:SetValue(5)
+eq(Stub.cvars.Gamma, "2.8", "clamped to the 2.8 maximum")
+gs:SetValue(0)
+eq(Stub.cvars.Gamma, "0.3", "clamped to the 0.3 minimum")
+gu.scripts.OnClick(gu, "LeftButton")
+eq(tonumber(Stub.cvars.Gamma), 1, "gamma undo back to 1.0")
+eq(QuickToggleDB.sliders.gamma.revert, nil, "gamma undo point cleared")
+gs:SetValue(1.4)
+gs:SetValue(1.0)
+eq(QuickToggleDB.sliders.gamma.revert, nil, "sliding gamma back to 1.0 leaves nothing to undo")
+SetCVar("Gamma", "0.8")
+eq(gs:GetValue(), 0.8, "gamma follows a change made in Options")
+eq(grow.value:GetText(), "0.8", "and shows it")
+SetCVar("Gamma", "1.0")
+Stub.Slash("gamma 1.5")
+eq(Stub.cvars.Gamma, "1.5", "/qt gamma 1.5")
+Stub.Slash("gamma undo")
+eq(tonumber(Stub.cvars.Gamma), 1, "/qt gamma undo")
+Stub.Slash("gamma 3")
+check(Stub.LastPrint():find("<0.3%-2.8>") ~= nil, "gamma usage shows the real 0.3-2.8 range")
+Stub.Slash("contrast 140")
+check(Stub.LastPrint():find("<0%-100>") ~= nil, "contrast usage still shows 0-100")
+n0 = #Stub.printed
+Stub.Slash("list")
+check(Stub.printed[n0 + 5]:find("Gamma") and Stub.printed[n0 + 5]:find("<0.3%-2.8>") and Stub.printed[n0 + 5]:find("now: 1.0"), "list shows gamma range and value")
+QT:OpenMenu(panel)
+eq(menu.rows[5].label:GetText(), "Gamma", "menu row 5 is gamma")
+menu:Hide()
+Stub.Slash("disable gamma")
+eq(gs:IsShown(), false, "/qt disable gamma hides its row")
+Stub.Slash("enable gamma")
+eq(gs:IsShown(), true, "/qt enable gamma shows it")
 
 -- Fresh saved variables from 1.0.x gain the slider tables.
 check(type(QuickToggleDB.sliders) == "table" and QuickToggleDB.sliderPos ~= nil, "slider settings present in saved variables")

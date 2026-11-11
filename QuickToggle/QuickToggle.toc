@@ -1,8 +1,8 @@
 ## Interface: 16001
 ## Title: Quick Toggle
-## Notes: Round minimap buttons that flip one game setting each with a single click, plus brightness and contrast sliders with undo. Pick which ones you want from the right-click menu.
+## Notes: Round minimap buttons that flip one game setting each with a single click, plus brightness, contrast and gamma sliders with undo. Pick which ones you want from the right-click menu.
 ## Author: usshadowop
-## Version: 1.1.0
+## Version: 1.2.0
 ## SavedVariables: QuickToggleDB
 ## IconTexture: Interface\Icons\INV_Misc_Gear_01
 
