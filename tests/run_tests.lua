@@ -911,13 +911,15 @@ Stub.Slash("blizzard off")
 -- /reload: ticked controls come back
 -------------------------------------------------------------------------------
 -------------------------------------------------------------------------------
--- Section frames: gold outline around each section's boxes, "Quick Toggle" above it
+-- Section brackets: "Quick Toggle" underlined, a bar down the side, a branch per row
 -------------------------------------------------------------------------------
 local ovl = QuickToggleSectionFrames
 check(ovl ~= nil, "section overlay created")
 eq(ovl.parent, SettingsPanel, "on the Options window, so it only runs while Options is open")
 eq(ovl.clips, true, "clipped to the list area")
 check(ovl.scripts.OnUpdate ~= nil, "updates on its own OnUpdate")
+local op = { ovl:GetPoint(1) }
+check(op[2] == Stub.scrollBox and op[4] < -6 and op[5] == 8, "overlay widened left for the bar and up to meet the underline")
 
 local hControls, hMouse, hKeys = Stub.Header("Controls"), Stub.Header("Mouse"), Stub.Header("Keys")
 local iLootKey = Stub.Init({ name = "Loot Key", buttonText = "SHIFT" }, 0, "SettingsDropdownControlTemplate")
@@ -940,53 +942,72 @@ local fB = Stub.ListRow(iBind, 200, 174)
 Stub.visibleFrames = { fHC, fA, fLK, fT, fHM, fC, fCI, fHK, fB }
 Stub.Tick(0.06)
 
-local B, L = QT.optionBorders, QT.optionBorderLabels
-local function shownCount() local n = 0 for _, b in ipairs(B) do if b:IsShown() then n = n + 1 end end return n end
-eq(shownCount(), 2, "one outline per section that has boxes (Controls, Mouse); none for Keys")
-local p1 = { B[1]:GetPoint(1) }
-local p2 = { B[1]:GetPoint(2) }
-check(p1[1] == "TOPLEFT" and p1[2] == fA and p1[5] == 2, "Controls outline starts at its first row")
-check(p2[1] == "BOTTOMLEFT" and p2[2] == fT and p2[5] == -2, "and ends at its last row")
-eq(B[1].w, 37, "as wide as the gutter the boxes sit in")
-check(B[1].top.color and B[1].top.color[1] == 1 and B[1].top.color[3] == 0, "gold lines")
-check(B[1].top and B[1].bottom and B[1].left and B[1].right, "four sides")
-eq(L[1]:IsShown(), true, "'Quick Toggle' label shown above the section")
-eq(L[1]:GetText(), "Quick Toggle", "label text")
-eq(L[1].fontSize, 8, "in small type")
-local lp = { L[1]:GetPoint(1) }
-check(lp[1] == "BOTTOMLEFT" and lp[2] == fA and lp[3] == "TOPLEFT", "label sits just above the first row")
-local m1 = { B[2]:GetPoint(1) }
-local m2 = { B[2]:GetPoint(2) }
-check(m1[2] == fC and m2[2] == fCI, "Mouse outline covers its two rows")
-eq(B[2].w, 52, "and widens for indented rows")
-check(fLK.data == nil, "rows without boxes (Loot Key) are inside the outline but untouched")
+local BR, TK = QT.optionBrackets, QT.optionTicks
+local function shownBrackets() local n = 0 for _, b in ipairs(BR) do if b.bar:IsShown() then n = n + 1 end end return n end
+local function shownTicks()
+	local out = {}
+	for _, t in ipairs(TK) do if t:IsShown() then out[#out + 1] = t end end
+	return out
+end
+eq(shownBrackets(), 2, "one bracket per section that has boxes (Controls, Mouse); none for Keys")
+local c = BR[1]
+eq(c.label:GetText(), "Quick Toggle", "label text")
+eq(c.label.fontSize, nil, "in the game's own small label font, not shrunk")
+check(c.label.color[1] == 1 and c.label.color[3] == 0, "yellow")
+local lp = { c.label:GetPoint(1) }
+check(lp[1] == "BOTTOMLEFT" and lp[2] == fA and lp[4] == -6, "label sits above the section's first row, over the bar")
+local up = { c.underline:GetPoint(1) }
+check(c.underline:IsShown() and up[2] == c.label and up[3] == "BOTTOMLEFT", "underlined")
+eq(c.underline.w, #"Quick Toggle" * 6 + 2, "underline as wide as the words")
+eq(c.underline.h, 2, "2 px thick")
+local bp1, bp2 = { c.bar:GetPoint(1) }, { c.bar:GetPoint(2) }
+check(bp1[2] == c.underline and bp1[1] == "TOPLEFT", "bar starts at the underline's left end")
+check(bp2[1] == "BOTTOMLEFT" and bp2[2] == fT and bp2[4] == -6 and bp2[5] == 0, "and runs to the bottom of the section")
+eq(c.bar.w, 2, "2 px wide")
+check(c.bar.color[1] == 1 and c.bar.color[3] == 0, "yellow bar")
+local tk = shownTicks()
+eq(#tk, 4, "a branch for each row with boxes (Auto Loot, Show Tips, Camera x2), none for Loot Key")
+local t1 = { tk[1]:GetPoint(1) }
+check(t1[1] == "LEFT" and t1[2] == fA and t1[4] == -6 and t1[5] == 0, "branch leaves the bar at the row's middle")
+eq(tk[1].w, 8, "and reaches the first box")
+eq(tk[1].h, 2, "same thickness as the bar")
+local branchRows = {}
+for _, t in ipairs(tk) do branchRows[({ t:GetPoint(1) })[2]] = t end
+check(branchRows[fLK] == nil and branchRows[fB] == nil, "rows without boxes get no branch")
+eq(branchRows[fCI] and branchRows[fCI].w, 23, "indented rows get a longer branch")
+check(BR[1].top == nil and BR[1].right == nil and BR[1].bottom == nil, "no top, right or bottom edges")
+local mb2 = { BR[2].bar:GetPoint(2) }
+eq(mb2[2], fCI, "Mouse bracket runs to its last row")
 
--- Scrolled so the section's first row is off the top: outline starts at the first visible row, no label.
+-- Scrolled so the section's first row is off the top: no label, bar starts at the list's top edge.
 Stub.visibleFrames = { fLK, fT, fHM, fC, fCI }
-fLK.topY, fLK.bottomY = 410, 384
+fLK.topY, fLK.bottomY = 420, 394
 Stub.Tick(0.06)
-local s1 = { B[1]:GetPoint(1) }
-eq(s1[2], fLK, "outline starts at the first visible row when scrolled")
-eq(L[1]:IsShown(), false, "label hidden while the section's first row is scrolled away")
+eq(BR[1].label:IsShown() or BR[1].underline:IsShown(), false, "label and underline hidden while the section's top is scrolled away")
+local sp = { BR[1].bar:GetPoint(1) }
+check(sp[2] == fLK and sp[5] == -10, "bar starts exactly at the list's top edge")
+eq(#shownTicks(), 3, "branches only for visible rows with boxes")
 fLK.topY, fLK.bottomY = 364, 338
 
--- Pages that are not a settings list (key bindings, add-on canvases): no outlines.
+-- Pages that are not a settings list (key bindings, add-on canvases): nothing drawn.
 Stub.currentLayout = {}
 Stub.Tick(0.06)
-eq(shownCount(), 0, "no outlines on other kinds of page")
-for _, l in ipairs(L) do check(not l:IsShown(), "no labels either") end
+eq(shownBrackets(), 0, "no brackets on other kinds of page")
+eq(#shownTicks(), 0, "no branches either")
+for _, b in ipairs(BR) do check(not b.label:IsShown(), "no labels either") end
 Stub.currentLayout = nil
 Stub.visibleFrames = {}
 
--- Combined rows: a small frame around the right-edge pair.
+-- Combined rows: a short bar left of the right-edge pair.
 local rf2 = Stub.ShowRow(iFPS)
 local pairFrame
 for _, f in ipairs(Stub.frames) do
-	if f.parent == rf2 and f.objectType == "Frame" and f.top then pairFrame = f end
+	if f.parent == rf2 and f.objectType == "Frame" and f.bar then pairFrame = f end
 end
-check(pairFrame and pairFrame:IsShown(), "right-edge pair has its own outline")
+check(pairFrame and pairFrame:IsShown(), "right-edge pair has its own bar")
 local pf1 = { pairFrame:GetPoint(1) }
-check(pf1[2] == Boxes(rf2)[3], "around the pair")
+check(pf1[1] == "TOPRIGHT" and pf1[2] == Boxes(rf2)[3] and pf1[3] == "TOPLEFT", "just left of the pair")
+eq(pairFrame.w, 2, "same 2 px bar")
 SettingsListElementMixin.Init(rf2, iAutoLoot)
 eq(pairFrame:IsShown(), false, "hidden when the row is reused for a single setting")
 

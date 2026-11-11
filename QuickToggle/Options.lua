@@ -11,8 +11,9 @@
 	checkbox with a slider or dropdown get a second pair at the row's right edge for the
 	slider or dropdown part. Hover a box to see what it does.
 
-	Each section's column of boxes has a thin gold frame around it with a small "Quick
-	Toggle" label on top, so it reads as an add-on addition (see "Section frames" below).
+	Each section's boxes hang off a yellow bracket: "Quick Toggle" underlined at the top, a
+	vertical bar down the left side to the bottom of the section, and a short branch from
+	the bar to each row's boxes, so it reads as an add-on addition (see "Section brackets").
 
 	How it stays safe (checked against Blizzard's UI source for 1.60.1.70862):
 
@@ -497,28 +498,18 @@ local function OnBoxClick(box)
 	end
 end
 
-local GOLD = { 1, 0.82, 0, 0.55 }
+local LINE = { 1, 0.82, 0, 0.85 } -- WoW's label yellow, slightly see-through
+local LINE_W = 2
 
--- Four 1 px lines around `f`.
-local function Outline(f)
-	local function Line()
-		local t = f:CreateTexture(nil, "ARTWORK")
-		t:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], GOLD[4])
-		return t
-	end
-	f.top, f.bottom, f.left, f.right = Line(), Line(), Line(), Line()
-	f.top:SetPoint("TOPLEFT"); f.top:SetPoint("TOPRIGHT"); f.top:SetHeight(1)
-	f.bottom:SetPoint("BOTTOMLEFT"); f.bottom:SetPoint("BOTTOMRIGHT"); f.bottom:SetHeight(1)
-	f.left:SetPoint("TOPLEFT"); f.left:SetPoint("BOTTOMLEFT"); f.left:SetWidth(1)
-	f.right:SetPoint("TOPRIGHT"); f.right:SetPoint("BOTTOMRIGHT"); f.right:SetWidth(1)
+local function Line(parent, layer)
+	local t = parent:CreateTexture(nil, layer or "ARTWORK")
+	t:SetColorTexture(LINE[1], LINE[2], LINE[3], LINE[4])
+	return t
 end
 
-local function SmallLabel(parent)
+-- "Quick Toggle" in the game's small yellow label font.
+local function SectionLabel(parent)
 	local fs = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-	if fs.GetFont and fs.SetFont then
-		local font, _, flags = fs:GetFont()
-		if font then fs:SetFont(font, 8, flags) end
-	end
 	fs:SetTextColor(QT.YELLOW[1], QT.YELLOW[2], QT.YELLOW[3])
 	fs:SetText("Quick Toggle")
 	return fs
@@ -551,9 +542,10 @@ local function Decorate(row, initializer)
 	if not first and not second and not boxes then return end -- leave rows we never touched alone
 	if not boxes then
 		boxes = { CreateBox(row), CreateBox(row, true), CreateBox(row), CreateBox(row, true) }
-		-- Thin frame around the right-edge pair on combined rows.
+		-- A short bar left of the right-edge pair on combined rows, like the section bracket.
 		boxes.frame = CreateFrame("Frame", nil, row)
-		Outline(boxes.frame)
+		boxes.frame.bar = Line(boxes.frame)
+		boxes.frame.bar:SetAllPoints()
 		boxes.frame:Hide()
 		rowBoxes[row] = boxes
 	end
@@ -581,33 +573,43 @@ local function Decorate(row, initializer)
 	local f = boxes.frame
 	f:SetFrameLevel(level)
 	f:ClearAllPoints()
-	f:SetPoint("TOPLEFT", boxes[3], "TOPLEFT", -2, 2)
-	f:SetPoint("BOTTOMRIGHT", boxes[4], "BOTTOMRIGHT", 2, -2)
+	f:SetPoint("TOPRIGHT", boxes[3], "TOPLEFT", -3, 2)
+	f:SetPoint("BOTTOMRIGHT", boxes[3], "BOTTOMLEFT", -3, -2)
+	f:SetWidth(LINE_W)
 	if second then f:Show() else f:Hide() end
 end
 
 -------------------------------------------------------------------------------
--- Section frames: a gold outline around each section's column of boxes
+-- Section brackets: "Quick Toggle" + a yellow bar down each section's boxes
 -------------------------------------------------------------------------------
 
 --[[
-	Blizzard's settings list is a scroll box of separate row frames, so a frame around a
+	    Quick Toggle            label, in the game's small yellow font
+	    ‾‾‾‾‾‾‾‾‾‾‾‾            underline
+	    |-[ ][ ] Sticky Targeting
+	    |-[ ][ ] Auto Loot
+	    |        Loot Key       rows without boxes: the bar passes by, no branch
+	    |-[ ][ ] Enable Interact Key
+	    |                       ...down to the bottom of the section
+
+	Blizzard's settings list is a scroll box of separate row frames, so the bracket for a
 	whole section is drawn on an overlay of our own: parented to SettingsPanel, clipped to
-	the list's area, and only running while the Options window is open. Every 0.05 s it
-	reads (never changes) the current page's initializers and the list's visible frames,
-	groups rows by section (a section header starts a new one), and anchors one outline
-	from the section's first visible row to its last. The outline covers every row in the
-	section, including rows without boxes (key bindings, buttons), and only sections that
-	have at least one setting with boxes get one. The "Quick Toggle" label sits above the
-	outline when the section's first row is on screen; it lives on a second, unclipped
-	overlay so it can show above the list's top edge.
+	the list's area (plus a margin on the left for the bar), and only running while the
+	Options window is open. Every 0.05 s it reads (never changes) the current page's
+	initializers and the list's visible frames, groups rows by section (a section header
+	starts a new one), runs the bar from the section's first visible row to the bottom of
+	its last, and draws a branch to every visible row that has boxes. Only sections with
+	at least one setting that has boxes get a bracket. The label and underline sit above
+	the bar while the section's first row is fully on screen; they live on a second,
+	unclipped overlay so they can show above the list's top edge.
 ]]
 
-local BORDER_W = 37 -- the gutter before Blizzard's labels (label x = indent + 37)
+local BAR_X = -6     -- the bar's left edge, relative to the row's left edge (boxes start at indent + 2)
+local BOX_X = 2      -- where the first box starts, before indent
 local overlay, labels
-local borders, borderLabels = {}, {}
-QT.optionBorders = borders
-QT.optionBorderLabels = borderLabels
+local brackets, ticks = {}, {}
+QT.optionBrackets = brackets
+QT.optionTicks = ticks
 
 local function IsHeader(init)
 	local ok, template = pcall(init.GetTemplate, init)
@@ -626,23 +628,42 @@ local function InitIndent(init)
 	return (ok and type(n) == "number") and n or 0
 end
 
-local function Border(i)
-	local b = borders[i]
+local function Bracket(i)
+	local b = brackets[i]
 	if not b then
-		b = CreateFrame("Frame", nil, overlay)
-		Outline(b)
-		borders[i] = b
-		local l = SmallLabel(labels)
-		borderLabels[i] = l
+		b = {
+			bar = Line(overlay),
+			label = SectionLabel(labels),
+			underline = Line(labels),
+		}
+		b.bar:SetWidth(LINE_W)
+		b.underline:SetHeight(LINE_W)
+		brackets[i] = b
 	end
-	return b, borderLabels[i]
+	return b
 end
 
-local function HideBorders(from)
-	for i = from, #borders do
-		borders[i]:Hide()
-		borderLabels[i]:Hide()
+local function Tick(i)
+	local t = ticks[i]
+	if not t then
+		t = Line(overlay)
+		t:SetHeight(LINE_W)
+		ticks[i] = t
 	end
+	return t
+end
+
+local function HideFrom(list, from, fn)
+	for i = from, #list do fn(list[i]) end
+end
+
+local function HideBracket(b)
+	b.bar:Hide(); b.label:Hide(); b.underline:Hide()
+end
+
+local function HideAll()
+	HideFrom(brackets, 1, HideBracket)
+	HideFrom(ticks, 1, function(t) t:Hide() end)
 end
 
 function QT:UpdateSectionFrames()
@@ -652,14 +673,14 @@ function QT:UpdateSectionFrames()
 	local okC, layout = pcall(SettingsPanel.GetCurrentLayout, SettingsPanel)
 	if not sb or type(sb.EnumerateFrames) ~= "function" or not okC or type(layout) ~= "table"
 		or type(layout.GetInitializers) ~= "function" then
-		HideBorders(1)
+		HideAll()
 		return
 	end
 	local okI, inits = pcall(layout.GetInitializers, layout)
-	if not okI or type(inits) ~= "table" then HideBorders(1); return end
+	if not okI or type(inits) ~= "table" then HideAll(); return end
 
-	-- Which section each row belongs to, and which sections have boxes.
-	local section, first, boxed, indent = {}, {}, {}, {}
+	-- Which section each row belongs to, which rows have boxes, which sections have any.
+	local section, first, boxedSection, boxedRow = {}, {}, {}, {}
 	local sid = 0
 	for _, init in ipairs(inits) do
 		if type(init) == "table" and IsShownInit(init) then
@@ -670,53 +691,73 @@ function QT:UpdateSectionFrames()
 				first[sid] = first[sid] or init
 				local part = Parts(init.data)[1]
 				if part and Classify(part) then
-					boxed[sid] = true
-					indent[sid] = math.max(indent[sid] or 0, InitIndent(init))
+					boxedSection[sid] = true
+					boxedRow[init] = true
 				end
 			end
 		end
 	end
 
-	-- The first and last visible row of each boxed section.
+	-- The first and last visible row of each boxed section, and its rows with boxes.
 	local groups, order = {}, {}
 	local okE, iter, state, start = pcall(sb.EnumerateFrames, sb)
-	if not okE or type(iter) ~= "function" then HideBorders(1); return end
+	if not okE or type(iter) ~= "function" then HideAll(); return end
 	for _, frame in iter, state, start do
 		local init = type(frame.GetElementData) == "function" and frame:GetElementData()
 		local s = init and section[init]
-		if s and boxed[s] and frame:IsShown() then
+		if s and boxedSection[s] and frame:IsShown() then
 			local top, bottom = frame:GetTop(), frame:GetBottom()
 			if top and bottom then
 				local g = groups[s]
 				if not g then
-					g = { s = s }
+					g = { s = s, rows = {} }
 					groups[s] = g
 					order[#order + 1] = g
 				end
 				if not g.topY or top > g.topY then g.topY, g.top, g.topInit = top, frame, init end
 				if not g.bottomY or bottom < g.bottomY then g.bottomY, g.bottom = bottom, frame end
+				if boxedRow[init] then g.rows[#g.rows + 1] = { frame = frame, init = init } end
 			end
 		end
 	end
 
 	local listTop = sb.GetTop and sb:GetTop()
+	local nTicks = 0
 	for i, g in ipairs(order) do
-		local b, label = Border(i)
-		b:ClearAllPoints()
-		b:SetPoint("TOPLEFT", g.top, "TOPLEFT", 0, 2)
-		b:SetPoint("BOTTOMLEFT", g.bottom, "BOTTOMLEFT", 0, -2)
-		b:SetWidth(BORDER_W + (indent[g.s] or 0))
-		b:Show()
-		label:ClearAllPoints()
-		label:SetPoint("BOTTOMLEFT", g.top, "TOPLEFT", 0, 3)
-		-- Only above the section's real first row, and only while that row is fully in view.
-		if g.topInit == first[g.s] and (not listTop or g.topY <= listTop + 0.5) then
-			label:Show()
+		local b = Bracket(i)
+		-- Label + underline only above the section's real first row, while it is fully in view.
+		local labelled = g.topInit == first[g.s] and (not listTop or g.topY <= listTop + 0.5)
+		b.label:ClearAllPoints()
+		b.label:SetPoint("BOTTOMLEFT", g.top, "TOPLEFT", BAR_X, 5)
+		b.underline:ClearAllPoints()
+		b.underline:SetPoint("TOPLEFT", b.label, "BOTTOMLEFT", 0, -1)
+		b.underline:SetWidth((b.label.GetStringWidth and b.label:GetStringWidth() or 60) + 2)
+		b.bar:ClearAllPoints()
+		if labelled then
+			b.label:Show()
+			b.underline:Show()
+			b.bar:SetPoint("TOPLEFT", b.underline, "TOPLEFT", 0, 0)
 		else
-			label:Hide()
+			b.label:Hide()
+			b.underline:Hide()
+			-- Start exactly at the list's top edge when the section's top is scrolled away.
+			local dy = listTop and math.min(0, listTop - g.topY) or 0
+			b.bar:SetPoint("TOPLEFT", g.top, "TOPLEFT", BAR_X, dy)
+		end
+		b.bar:SetPoint("BOTTOMLEFT", g.bottom, "BOTTOMLEFT", BAR_X, 0)
+		b.bar:Show()
+		-- A branch from the bar to the first box of every row that has boxes.
+		for _, r in ipairs(g.rows) do
+			nTicks = nTicks + 1
+			local t = Tick(nTicks)
+			t:ClearAllPoints()
+			t:SetPoint("LEFT", r.frame, "LEFT", BAR_X, 0)
+			t:SetWidth(InitIndent(r.init) + BOX_X - BAR_X)
+			t:Show()
 		end
 	end
-	HideBorders(#order + 1)
+	HideFrom(brackets, #order + 1, HideBracket)
+	HideFrom(ticks, nTicks + 1, function(t) t:Hide() end)
 end
 
 do
@@ -727,7 +768,10 @@ do
 	local sb = okL and type(list) == "table" and list.ScrollBox
 	if sb and type(sb.EnumerateFrames) == "function" then
 		overlay = CreateFrame("Frame", "QuickToggleSectionFrames", SettingsPanel)
-		overlay:SetAllPoints(sb)
+		-- The list's area, widened a little to the left for the bar, and 8 px up so the bar
+		-- meets the underline when the first row is at the very top.
+		overlay:SetPoint("TOPLEFT", sb, "TOPLEFT", BAR_X - 6, 8)
+		overlay:SetPoint("BOTTOMRIGHT", sb, "BOTTOMRIGHT", 0, 0)
 		if overlay.SetClipsChildren then overlay:SetClipsChildren(true) end
 		overlay:SetFrameLevel((sb.GetFrameLevel and sb:GetFrameLevel() or 1) + 20)
 		labels = CreateFrame("Frame", "QuickToggleSectionLabels", SettingsPanel)
@@ -740,7 +784,7 @@ do
 			if elapsed < 0.05 then return end
 			elapsed = 0
 			local ok, err = pcall(QT.UpdateSectionFrames, QT)
-			if not ok and QT.debug then QT.Print("section frames: " .. tostring(err)) end
+			if not ok and QT.debug then QT.Print("section brackets: " .. tostring(err)) end
 		end)
 	end
 end
