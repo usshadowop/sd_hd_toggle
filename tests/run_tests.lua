@@ -71,7 +71,7 @@ mu.scripts.OnEnter(mu)
 check(GameTooltip.lines[1] == "Music" and GameTooltip.lines[2]:find("on") ~= nil, "music tooltip shows the state")
 Stub.cvars.Sound_EnableAllSound = "0"
 mu.scripts.OnEnter(mu)
-check(GameTooltip.lines[#GameTooltip.lines - 1]:find("All sound is off") ~= nil, "music tooltip warns when all sound is off")
+check(table.concat(GameTooltip.lines, " "):find("All sound is off") ~= nil, "music tooltip warns when all sound is off")
 Stub.cvars.Sound_EnableAllSound = "1"
 mu.scripts.OnLeave(mu)
 
@@ -596,6 +596,37 @@ eq(bub.cross:IsShown(), false, "X gone while on")
 eq(fl.icon.texture, "Interface\\RaidFrame\\ReadyCheck-Ready", "the floating button for the same setting follows")
 local ap = { bub:GetPoint(1) }
 check(math.abs(ap[4] - 130 * math.cos(math.rad(180))) < 0.01, "first generic bubble sits at 180 degrees")
+
+-- Alt-click removes a minimap button or floating button without touching the setting.
+local cvBefore = Stub.cvars.autoLootDefault
+Stub.alt = true
+bub.scripts.OnClick(bub, "LeftButton")
+Stub.alt = false
+eq(bub:IsShown(), false, "alt-click removes the minimap button")
+eq(QuickToggleDB.buttons["autoLootDefault@bubble"].enabled, false, "and saves that")
+eq(Stub.cvars.autoLootDefault, cvBefore, "the setting itself is not changed")
+check(Stub.LastPrint():find("Auto Loot button removed") ~= nil, "says it was removed and how to add it back")
+eq(b[2]:GetChecked(), false, "its box in the Options window unticks")
+b[2]:SetChecked(true)
+b[2].scripts.OnClick(b[2])
+eq(bub:IsShown(), true, "ticking the box brings it back")
+Stub.alt = true
+fl.scripts.OnClick(fl, "LeftButton")
+Stub.alt = false
+eq(fl:IsShown(), false, "alt-click removes a floating button")
+eq(Stub.cvars.autoLootDefault, cvBefore, "without changing the setting")
+eq(b[1]:GetChecked(), false, "its box unticks too")
+QT:SetEnabled("autoLootDefault@float", true)
+eq(fl:IsShown(), true, "re-enabled from the menu")
+Stub.alt = true
+mu.scripts.OnClick(mu, "LeftButton")
+Stub.alt = false
+eq(mu:IsShown(), false, "alt-click works on hand-made buttons (Music)")
+eq(Stub.cvars.Sound_EnableMusic, "1", "music left as it was")
+QT:SetEnabled("music", true)
+bub.scripts.OnEnter(bub)
+check(table.concat(GameTooltip.lines, " "):find("Alt%-click to remove") ~= nil, "tooltip mentions alt-click")
+bub.scripts.OnLeave(bub)
 
 -- Change in Options: both controls follow.
 SetCVar("autoLootDefault", "0")

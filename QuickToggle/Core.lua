@@ -222,6 +222,7 @@ function QT:ToggleTooltip(frame, anchor)
 		end
 	end
 	GameTooltip:AddLine(db.locked and "Right-click for the menu. Locked in place." or "Right-click for the menu. Drag to move.", 0.5, 0.5, 0.5)
+	GameTooltip:AddLine("Alt-click to remove this button.", 0.5, 0.5, 0.5)
 	GameTooltip:Show()
 end
 
@@ -229,9 +230,14 @@ local function OnEnter(self) QT:ToggleTooltip(self, "ANCHOR_LEFT") end
 local function OnLeave() if GameTooltip then GameTooltip:Hide() end end
 
 -- Shared click handling for bubbles and floating buttons.
+-- Alt-click removes the button (same as unticking it in the menu); the setting is left alone.
 function QT:ToggleClick(frame, mouseButton)
 	if mouseButton == "RightButton" then
 		self:OpenMenu(frame)
+	elseif IsAltKeyDown and IsAltKeyDown() then
+		if GameTooltip and GameTooltip:IsOwned(frame) then GameTooltip:Hide() end
+		self:SetEnabled(frame.def.key, false)
+		Print(self:ElementName(frame.def.key) .. " removed. Add it back from the menu (right-click another control, or /qt) or the Options window.")
 	else
 		self:Press(frame.def.key, nil, IsShiftKeyDown and IsShiftKeyDown())
 	end

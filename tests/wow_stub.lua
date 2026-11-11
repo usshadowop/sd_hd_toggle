@@ -184,6 +184,8 @@ Stub.combat = false
 function InCombatLockdown() return Stub.combat end
 Stub.shift = false
 function IsShiftKeyDown() return Stub.shift end
+Stub.alt = false
+function IsAltKeyDown() return Stub.alt end
 
 -- hooksecurefunc(table, "method", hook): original runs first, then the hook.
 function hooksecurefunc(tbl, name, hook)

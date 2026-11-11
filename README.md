@@ -62,6 +62,7 @@ minimap button, it becomes the Character Models minimap button at the same spot.
 | Untick it | remove that control |
 | Left-click a button | flip the setting, or go to the next choice for a dropdown |
 | Shift-click a dropdown's button | go to the previous choice |
+| Alt-click a minimap or floating button | remove it (the setting is left as it is); add it back from the menu or the Options window |
 | Drag a slider, click along it, or roll the mouse wheel over it | change that setting |
 | Click a slider's undo button | put the setting back where it was before you moved the slider |
 | Drag a button, block or the panel | move it (minimap buttons slide around the ring) |
