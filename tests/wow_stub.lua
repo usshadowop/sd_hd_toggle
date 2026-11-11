@@ -28,9 +28,11 @@ C_GameRules = {
 }
 
 -- Console variables: Sound_EnableMusic is what the music toggle drives.
-Stub.cvars = { Sound_EnableMusic = "1", Sound_EnableAllSound = "1" }
+Stub.cvars = { Sound_EnableMusic = "1", Sound_EnableAllSound = "1", Brightness = "50", Contrast = "50" }
+Stub.lockedCVars = {} -- names SetCVar should refuse, to test the "did not accept" path
 function GetCVar(name) return Stub.cvars[name] end
 function SetCVar(name, value)
+	if Stub.lockedCVars[name] then error("cvar is secure") end
 	Stub.cvars[name] = tostring(value)
 	Stub.Fire("CVAR_UPDATE", name, tostring(value))
 end
@@ -65,6 +67,28 @@ local function newRegion(kind)
 	function r:GetChecked() return self.checked end
 	function r:EnableMouse() end
 	function r:SetHeight(h) self.h = h end
+	function r:SetWidth(w) self.w = w end
+	function r:GetHeight() return self.h end
+	function r:SetJustifyH(j) self.justify = j end
+	function r:Enable() self.enabled = true end
+	function r:Disable() self.enabled = false end
+	function r:IsEnabled() return self.enabled ~= false end
+	function r:SetMotionScriptsWhileDisabled() end
+	function r:EnableMouseWheel(b) self.wheel = b end
+	-- Slider
+	function r:SetOrientation(o) self.orientation = o end
+	function r:SetThumbTexture(t) self.thumb = t end
+	function r:SetMinMaxValues(a, b) self.minV, self.maxV = a, b end
+	function r:GetMinMaxValues() return self.minV, self.maxV end
+	function r:SetValueStep(st) self.step = st end
+	function r:SetObeyStepOnDrag(b) self.obey = b end
+	function r:GetValue() return self.value or 0 end
+	function r:SetValue(v)
+		if self.minV then v = math.max(self.minV, math.min(self.maxV, v)) end
+		local changed = v ~= self.value
+		self.value = v
+		if changed and self.scripts.OnValueChanged then self.scripts.OnValueChanged(self, v, false) end
+	end
 	function r:SetColorTexture(...) self.color = { ... } end
 	function r:SetScale(s) self.scale = s end
 	function r:SetFrameStrata(s) self.strata = s end

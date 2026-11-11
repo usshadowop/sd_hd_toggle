@@ -1,12 +1,17 @@
 --[[
 	Quick Toggle  -  World of Warcraft: Forever (interface 16001)
 
-	A set of round minimap buttons, one per game setting, each flipped with a single click.
-	Which buttons you want is chosen from a menu (right-click any button, or /qt).
+	A set of round minimap buttons, one per game setting, each flipped with a single click,
+	plus a small panel of sliders (brightness, contrast) with an undo button each. Which
+	buttons and sliders you want is chosen from a menu: right-click any button, any part of
+	the slider panel, or type /qt.
 
 	Core.lua is the framework: saved settings, the minimap button factory, the menu, the
 	slash command and key bindings, and a half-second poll that keeps every button's
 	picture in step with the game if the setting is changed somewhere else.
+
+	Sliders.lua builds the slider panel; each slider is declared in Sliders/<name>.lua with
+	QuickToggle:RegisterSlider.
 
 	Each toggle lives in Toggles/<name>.lua and registers itself with QuickToggle:Register,
 	giving: a key and name, how to read and write the setting, how to draw the inside of
@@ -20,6 +25,8 @@ local QT = {
 	toggles = {},  -- registration order
 	byKey = {},
 	buttons = {},  -- key -> minimap button
+	sliders = {},     -- registration order (filled by Sliders.lua)
+	sliderByKey = {},
 }
 _G.QuickToggle = QT
 
@@ -33,9 +40,12 @@ local DEFAULTS = {
 	sound = true,      -- click sound on every flip
 	announce = true,   -- chat line on every flip
 	buttons = {},      -- key -> { enabled = bool, angle = degrees around the minimap }
+	sliders = {},      -- key -> { enabled = bool, revert = value to undo back to, or nil }
+	sliderPos = false, -- slider panel { point, relPoint, x, y } relative to UIParent; false = default
 }
 
 local db -- QuickToggleDB after ADDON_LOADED
+function QT:DB() return db end
 
 local POLL = 0.5     -- seconds between re-reads of every setting
 local RING_PAD = 5   -- px outside the minimap edge
@@ -89,13 +99,23 @@ function QT:Available(def)
 end
 
 function QT:Settings(key)
+	local sdef = self.sliderByKey[key]
+	if sdef then
+		local s = db.sliders[key]
+		if not s then
+			s = {}
+			db.sliders[key] = s
+		end
+		if s.enabled == nil then s.enabled = sdef.defaultEnabled end
+		return s
+	end
 	local def = self.byKey[key]
 	local s = db.buttons[key]
 	if not s then
-		s = { enabled = def and def.defaultEnabled or true, angle = def and def.defaultAngle or 220 }
+		s = {}
 		db.buttons[key] = s
 	end
-	if s.enabled == nil then s.enabled = def and def.defaultEnabled or true end
+	if s.enabled == nil then s.enabled = not (def and def.defaultEnabled == false) end
 	if s.angle == nil then s.angle = def and def.defaultAngle or 220 end
 	return s
 end
@@ -244,6 +264,7 @@ end
 
 function QT:Refresh()
 	for _, def in ipairs(self.toggles) do self:ApplyVisibility(def) end
+	if self.RefreshSliders then self:RefreshSliders() end
 end
 
 -------------------------------------------------------------------------------
@@ -281,11 +302,22 @@ function QT:Press(key, value)
 end
 
 function QT:SetEnabled(key, enabled)
-	local def = self.byKey[key]
+	local def = self.byKey[key] or self.sliderByKey[key]
 	if not def then return false end
 	self:Settings(key).enabled = enabled and true or false
-	self:ApplyVisibility(def)
+	if self.sliderByKey[key] then
+		self:RefreshSliders()
+	else
+		self:ApplyVisibility(def)
+	end
 	return true
+end
+
+-- Display name for chat lines: "Music button", "Brightness slider".
+function QT:ElementName(key)
+	if self.sliderByKey[key] then return self.sliderByKey[key].name .. " slider" end
+	local def = self.byKey[key]
+	return def and (def.name .. " button") or key
 end
 
 function QT:SetShown(shown)
@@ -298,10 +330,12 @@ function QT:ResetPositions()
 		self:Settings(def.key).angle = def.defaultAngle or 220
 	end
 	self:PlaceAll()
+	db.sliderPos = false
+	if self.PlaceSliderPanel then self:PlaceSliderPanel() end
 end
 
 -------------------------------------------------------------------------------
--- The menu: tick the toggles you want as buttons
+-- The menu: tick the buttons and sliders you want
 -------------------------------------------------------------------------------
 
 local fallbackMenu
@@ -331,7 +365,7 @@ local function OpenFallbackMenu(owner)
 		m.lock:SetSize(24, 24)
 		m.lock.label = m:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 		m.lock.label:SetPoint("LEFT", m.lock, "RIGHT", 2, 0)
-		m.lock.label:SetText("Lock buttons in place")
+		m.lock.label:SetText("Lock buttons and sliders in place")
 		m.lock:SetScript("OnClick", function(self) db.locked = self:GetChecked() and true or false end)
 		m.reset = CreateFrame("Button", nil, m, "UIPanelButtonTemplate")
 		m.reset:SetSize(120, 22)
@@ -340,8 +374,31 @@ local function OpenFallbackMenu(owner)
 		if UISpecialFrames then tinsert(UISpecialFrames, "QuickToggleMenu") end
 	end
 
-	local y = -30
-	for i, def in ipairs(QT.toggles) do
+	-- One list: section headers and one tick row per button or slider.
+	local entries = {}
+	if #QT.toggles > 0 then entries[#entries + 1] = { header = "Minimap buttons" } end
+	for _, def in ipairs(QT.toggles) do entries[#entries + 1] = { def = def } end
+	if #QT.sliders > 0 then entries[#entries + 1] = { header = "Sliders" } end
+	for _, def in ipairs(QT.sliders) do entries[#entries + 1] = { def = def } end
+
+	m.headers = m.headers or {}
+	local y, i, h = -30, 0, 0
+	for _, entry in ipairs(entries) do
+		if entry.header then
+			h = h + 1
+			local fs = m.headers[h]
+			if not fs then
+				fs = m:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+				m.headers[h] = fs
+			end
+			fs:ClearAllPoints()
+			fs:SetPoint("TOPLEFT", 14, y - 4)
+			fs:SetText(entry.header)
+			fs:Show()
+			y = y - 18
+		else
+		i = i + 1
+		local def = entry.def
 		local row = m.rows[i]
 		if not row then
 			row = CreateFrame("CheckButton", nil, m, "UICheckButtonTemplate")
@@ -361,8 +418,10 @@ local function OpenFallbackMenu(owner)
 		row.label:SetText(ok and def.name or (def.name .. " |cff888888(" .. (reason or "not available") .. ")|r"))
 		row:Show()
 		y = y - 24
+		end
 	end
-	for i = #QT.toggles + 1, #m.rows do m.rows[i]:Hide() end
+	for k = i + 1, #m.rows do m.rows[k]:Hide() end
+	for k = h + 1, #m.headers do m.headers[k]:Hide() end
 
 	m.lock:ClearAllPoints()
 	m.lock:SetPoint("TOPLEFT", 10, y - 6)
@@ -371,6 +430,7 @@ local function OpenFallbackMenu(owner)
 	m.reset:SetPoint("TOPLEFT", 14, y - 36)
 	m:SetHeight(-y + 72)
 
+	m:SetWidth(250)
 	m:ClearAllPoints()
 	if owner and owner ~= UIParent then
 		m:SetPoint("TOPRIGHT", owner, "BOTTOMLEFT", 0, 0)
@@ -387,7 +447,7 @@ function QT:OpenMenu(owner)
 	if MenuUtil and MenuUtil.CreateContextMenu then
 		MenuUtil.CreateContextMenu(owner or UIParent, function(_, root)
 			root:CreateTitle("Quick Toggle")
-			for _, def in ipairs(QT.toggles) do
+			local function AddRow(def)
 				local ok, reason = QT:Available(def)
 				local box = root:CreateCheckbox(def.name,
 					function() return QT:IsEnabled(def.key) end,
@@ -399,8 +459,15 @@ function QT:OpenMenu(owner)
 					end
 				end
 			end
+			if #QT.toggles > 0 then root:CreateTitle("Minimap buttons") end
+			for _, def in ipairs(QT.toggles) do AddRow(def) end
+			if #QT.sliders > 0 then
+				root:CreateDivider()
+				root:CreateTitle("Sliders")
+			end
+			for _, def in ipairs(QT.sliders) do AddRow(def) end
 			root:CreateDivider()
-			root:CreateCheckbox("Lock buttons in place",
+			root:CreateCheckbox("Lock buttons and sliders in place",
 				function() return db.locked end,
 				function() db.locked = not db.locked end)
 			root:CreateButton("Reset positions", function() QT:ResetPositions() end)
@@ -455,6 +522,16 @@ local function List()
 			ok and def.Describe(def.Get()) or "n/a",
 			ok and "" or ("  - " .. (reason or "not available"))))
 	end
+	for _, def in ipairs(QT.sliders) do
+		local ok, reason = QT:Available(def)
+		local s = QT:Settings(def.key)
+		Print(string.format("%s  (/qt %s <%d-%d>|undo)  slider %s  now: %s%s%s",
+			def.name, def.key, def.min, def.max,
+			s.enabled and "on" or "off",
+			ok and def.Format(def.Get()) or "n/a",
+			(ok and s.revert) and ("  undo to " .. def.Format(s.revert)) or "",
+			ok and "" or ("  - " .. (reason or "not available"))))
+	end
 end
 
 SLASH_QUICKTOGGLE1 = "/qt"
@@ -483,10 +560,12 @@ SlashCmdList["QUICKTOGGLE"] = function(msg)
 		else
 			Print(def.name .. ": don't know '" .. rest .. "'.")
 		end
+	elseif QT.sliderByKey[cmd] then
+		QT:SliderCommand(cmd, rest)
 	elseif cmd == "enable" or cmd == "disable" then
 		local key = rest:lower()
 		if QT:SetEnabled(key, cmd == "enable") then
-			Print(QT.byKey[key].name .. " button " .. (cmd == "enable" and "on." or "off."))
+			Print(QT:ElementName(key) .. " " .. (cmd == "enable" and "on." or "off."))
 		else
 			Print("no toggle called '" .. key .. "'. /qt list shows them.")
 		end
@@ -498,14 +577,14 @@ SlashCmdList["QUICKTOGGLE"] = function(msg)
 		QT:SetShown(false)
 	elseif cmd == "lock" then
 		db.locked = true
-		Print("buttons locked.")
+		Print("buttons and sliders locked.")
 	elseif cmd == "unlock" then
 		db.locked = false
-		Print("buttons unlocked, drag them to move.")
+		Print("buttons and sliders unlocked, drag them to move.")
 	elseif cmd == "reset" then
 		QT:ResetPositions()
 		QT:SetShown(true)
-		Print("button positions reset.")
+		Print("button and slider positions reset.")
 	elseif cmd == "sound" then
 		db.sound = (rest:lower() ~= "off")
 		Print("sound " .. (db.sound and "on" or "off") .. ".")
@@ -516,7 +595,7 @@ SlashCmdList["QUICKTOGGLE"] = function(msg)
 		local t, k = rest:match("^(%S+)%s+(%S+)$")
 		BindKey(t and t:lower(), k)
 	else
-		Print("commands: /qt (menu), /qt <toggle> [value], enable|disable <toggle>, list, show, hide, lock, unlock, reset, sound on|off, announce on|off, key <toggle> <KEY>")
+		Print("commands: /qt (menu), /qt <toggle> [value], /qt brightness|contrast <0-100>|undo, enable|disable <name>, list, show, hide, lock, unlock, reset, sound on|off, announce on|off, key <toggle> <KEY>")
 	end
 end
 
@@ -530,8 +609,10 @@ ev:RegisterEvent("PLAYER_LOGIN")
 ev:RegisterEvent("PLAYER_ENTERING_WORLD")
 
 local function RegisterToggleEvents()
-	for _, def in ipairs(QT.toggles) do
-		for _, e in ipairs(def.events or {}) do ev:RegisterEvent(e) end
+	for _, list in ipairs({ QT.toggles, QT.sliders }) do
+		for _, def in ipairs(list) do
+			for _, e in ipairs(def.events or {}) do ev:RegisterEvent(e) end
+		end
 	end
 end
 
@@ -544,6 +625,7 @@ ev:SetScript("OnEvent", function(self, event, arg1)
 			if db[k] == nil then db[k] = (type(v) == "table") and {} or v end
 		end
 		for _, def in ipairs(QT.toggles) do QT:Setup(def) end
+		if QT.SetupSliders then QT:SetupSliders() end
 		RegisterToggleEvents()
 	elseif event == "PLAYER_LOGIN" then
 		if not db then return end
@@ -554,9 +636,16 @@ ev:SetScript("OnEvent", function(self, event, arg1)
 				Print(def.name .. " button hidden: " .. (reason or "not available here") .. ".")
 			end
 		end
+		for _, def in ipairs(QT.sliders) do
+			local ok, reason = QT:Available(def)
+			if not ok and QT:IsEnabled(def.key) then
+				Print(def.name .. " slider hidden: " .. (reason or "not available here") .. ".")
+			end
+		end
 	elseif event == "PLAYER_ENTERING_WORLD" then
 		if not db then return end
 		QT:PlaceAll()
+		if QT.PlaceSliderPanel then QT:PlaceSliderPanel() end
 		QT:Refresh()
 	else
 		if not db then return end
@@ -565,6 +654,7 @@ ev:SetScript("OnEvent", function(self, event, arg1)
 				if e == event then QT:Update(def) end
 			end
 		end
+		if QT.SyncSliders then QT:SyncSliders() end
 	end
 end)
 
@@ -581,4 +671,5 @@ ev:SetScript("OnUpdate", function(self, dt)
 			QT:Update(def)
 		end
 	end
+	if QT.SyncSliders then QT:SyncSliders() end
 end)

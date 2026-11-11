@@ -1,11 +1,13 @@
 ## Interface: 16001
 ## Title: Quick Toggle
-## Notes: Round minimap buttons that flip one game setting each with a single click. Pick which ones you want from the menu.
+## Notes: Round minimap buttons that flip one game setting each with a single click, plus brightness and contrast sliders with undo. Pick which ones you want from the right-click menu.
 ## Author: usshadowop
-## Version: 1.0.1
+## Version: 1.1.0
 ## SavedVariables: QuickToggleDB
 ## IconTexture: Interface\Icons\INV_Misc_Gear_01
 
 Core.lua
+Sliders.lua
 Toggles\SDHD.lua
 Toggles\Music.lua
+Sliders\Display.lua
