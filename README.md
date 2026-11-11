@@ -22,6 +22,11 @@ minimap button that reads HD or SD and switches every character model on a click
 Rows that combine a checkbox with a slider or dropdown get a second pair of boxes at the
 row's right edge for the slider or dropdown part. Hover any box to see what it does.
 
+So it's clear these boxes come from an add-on, each section's column of boxes has a thin gold
+outline around it, with a small **Quick Toggle** label on top. The outline runs from the
+section's first row to its last, rows without boxes included, and follows the list as you
+scroll. The right-edge pairs on combined rows get their own small outline.
+
 Every slider, floating or in the panel, has an **undo** button that puts the setting back
 where it was before you first moved the slider. Every control follows the game: change the
 setting in Options and the control updates.
@@ -125,6 +130,9 @@ later reads them can be blocked. Quick Toggle avoids that:
   CVar settings are written with `SetCVar`, not through Blizzard's setting object.
 - The boxes sit above the row's invisible hover area so a click on a box never also clicks
   Blizzard's checkbox.
+- The section outlines live on Quick Toggle's own overlay frames on top of the list. They read
+  the list's visible rows and the current page's layout to know where sections start and end,
+  and change nothing of Blizzard's.
 
 ## Adding a hand-made toggle
 
@@ -172,8 +180,8 @@ It needs `lua5.1` on PATH or `pip install lupa`.
 ## Things to verify in game
 
 - **Box placement.** The boxes sit in the 37 px gutter Blizzard leaves left of each setting's
-  label, and the second pair on combined rows at the row's right edge. If anything overlaps on
-  your screen, send a screenshot.
+  label, and the second pair on combined rows at the row's right edge. The section outline and
+  its label sit around and above them. If anything overlaps on your screen, send a screenshot.
 - **Settings that apply differently from an addon.** A few CVar settings also have Blizzard
   code that runs only when changed from the Options window. Those change correctly from a quick
   toggle but may need a moment, or a zone change, to show. Tell me which ones and I'll look.

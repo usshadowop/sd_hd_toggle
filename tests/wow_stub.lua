@@ -111,6 +111,11 @@ local function newRegion(kind)
 	function r:SetFrameLevel(l) self.level = l end
 	function r:GetFrameLevel() return self.level or 1 end
 	function r:GetCenter() return self.cx or 0, self.cy or 0 end
+	function r:GetTop() return self.topY end
+	function r:GetBottom() return self.bottomY end
+	function r:SetClipsChildren(b) self.clips = b end
+	function r:GetFont() return "Fonts\\FRIZQT__.TTF", 12, "" end
+	function r:SetFont(path, size, flags) self.fontSize = size end
 	function r:GetEffectiveScale() return self.effScale or 1 end
 	function r:SetBackdropColor() end
 	function r:SetBackdropBorderColor() end
@@ -272,8 +277,15 @@ function Stub.ProxySetting(var, vtype, name, initial)
 end
 
 -- Initializers as Blizzard builds them: .data plus GetIndent.
-function Stub.Init(data, indent)
-	return { data = data, GetIndent = function() return indent or 0 end }
+function Stub.Init(data, indent, template)
+	local init = { data = data, template = template or "SettingsCheckboxControlTemplate" }
+	function init:GetIndent() return indent or 0 end
+	function init:GetTemplate() return self.template end
+	function init:ShouldShow() return not self.hidden end
+	return init
+end
+function Stub.Header(name)
+	return Stub.Init({ name = name }, 0, "SettingsListSectionHeaderTemplate")
 end
 
 Stub.categories = {}
@@ -284,9 +296,25 @@ function Stub.Category(name, initializers, subs)
 	function cat.layout:GetInitializers() return self.inits end
 	return cat
 end
-SettingsPanel = {}
+SettingsPanel = CreateFrame("Frame", "SettingsPanel", UIParent)
 function SettingsPanel:GetAllCategories() return Stub.categories end
 function SettingsPanel:GetLayout(cat) return cat.layout end
+-- The settings list: a scroll box whose visible row frames are Stub.visibleFrames.
+Stub.scrollBox = CreateFrame("Frame", nil, SettingsPanel)
+Stub.scrollBox.topY, Stub.scrollBox.bottomY = 410, 100
+Stub.visibleFrames = {}
+function Stub.scrollBox:EnumerateFrames() return ipairs(Stub.visibleFrames) end
+SettingsPanel.settingsList = { ScrollBox = Stub.scrollBox }
+function SettingsPanel:GetSettingsList() return self.settingsList end
+function SettingsPanel:GetCurrentLayout() return Stub.currentLayout end
+-- Puts `init` on screen as a list row between top and bottom (y grows upward).
+function Stub.ListRow(init, top, bottom, frame)
+	frame = frame or CreateFrame("Frame", nil, UIParent)
+	if init.data and (init.data.setting or init.data.cbSetting) then SettingsListElementMixin.Init(frame, init) end
+	frame.GetElementData = function() return init end
+	frame.topY, frame.bottomY = top, bottom
+	return frame
+end
 
 -- Builds the row frame Blizzard would show for `init` and runs its setup.
 function Stub.ShowRow(init)

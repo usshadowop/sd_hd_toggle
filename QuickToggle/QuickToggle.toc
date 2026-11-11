@@ -2,7 +2,7 @@
 ## Title: Quick Toggle
 ## Notes: Turn any setting in the Options window into a minimap button, a floating button or a slider with undo. Tick the boxes next to each setting in Esc > Options.
 ## Author: usshadowop
-## Version: 2.1.0
+## Version: 2.2.0
 ## SavedVariables: QuickToggleDB
 ## IconTexture: Interface\Icons\INV_Misc_Gear_01
 
