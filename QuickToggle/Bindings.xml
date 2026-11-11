@@ -3,9 +3,6 @@
 	<Binding name="QUICKTOGGLE_MENU" category="ADDONS">
 		QuickToggle_Press("menu")
 	</Binding>
-	<Binding name="QUICKTOGGLE_SDHD" category="ADDONS">
-		QuickToggle_Press("sdhd")
-	</Binding>
 	<Binding name="QUICKTOGGLE_MUSIC" category="ADDONS">
 		QuickToggle_Press("music")
 	</Binding>

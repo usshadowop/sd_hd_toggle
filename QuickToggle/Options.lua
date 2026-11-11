@@ -23,6 +23,10 @@
 	  blocked" errors, so they are off until the user ticks "Allow settings that run
 	  Blizzard code" (menu, /qt blizzard on, or Options > AddOns > Quick Toggle), and are
 	  never changed in combat.
+	* A few proxy settings have a plain, documented API behind them. Those are applied with
+	  that API directly instead of through Blizzard's code (DIRECT below), so they need no
+	  opt-in: Character Models (SD / HD) calls C_GameRules.SetSDHDToggleValue, the same call
+	  Blizzard's own setter and Barbershop checkbox make.
 	* Settings that only apply after a restart (ClientRestart, GxRestart, UIReload,
 	  UpdateWindow commit flags) are shown with greyed boxes: a quick toggle can't apply them.
 ]]
@@ -47,6 +51,31 @@ local KIND_PAIRS = {
 
 local RESTART_FLAGS = { "ClientRestart", "GxRestart", "UIReload", "UpdateWindow" }
 
+-- Proxy settings applied through their documented API instead of Blizzard's setter.
+local function HasSDHD()
+	local gr = C_GameRules
+	return gr ~= nil and type(gr.IsSDHDToggleEnabled) == "function"
+		and type(gr.AccountHasSDEnabled) == "function" and type(gr.SetSDHDToggleValue) == "function"
+end
+local DIRECT = {
+	-- Options > Graphics (Preset.lua): value true = Standard Definition, false = High Definition.
+	PROXY_CHARACTER_MODELS_TOGGLE = {
+		Available = function()
+			if not HasSDHD() then return false, "this client has no SD/HD model switch" end
+			if not C_GameRules.IsSDHDToggleEnabled() then return false, "the SD/HD switch is turned off on this realm or account" end
+			return true
+		end,
+		Get = function()
+			if not HasSDHD() then return nil end
+			return C_GameRules.AccountHasSDEnabled() == true
+		end,
+		Set = function(sd)
+			local loc = (Enum and Enum.SdToggleUsageLocationUI and Enum.SdToggleUsageLocationUI.OptionsMenu) or 3
+			C_GameRules.SetSDHDToggleValue(sd and true or false, loc)
+		end,
+	},
+}
+
 local function Same(a, b)
 	if type(a) == "number" and type(b) == "number" then return math.abs(a - b) < 0.001 end
 	return a == b
@@ -60,6 +89,8 @@ end
 -- setValue closures). Anything else (add-on settings, modifier keys) is not offered.
 local function Backing(setting)
 	if type(setting) ~= "table" then return nil end
+	local okV, var = pcall(setting.GetVariable, setting)
+	if okV and DIRECT[var] then return "direct" end
 	if type(setting.NegateBoolean) == "function" then return "cvar" end
 	if setting.getValue ~= nil and setting.setValue ~= nil then return "proxy" end
 	return nil
@@ -148,6 +179,11 @@ local function Classify(part, category)
 end
 
 local function CurrentValue(info)
+	if info.backing == "direct" then
+		local ok, v = pcall(DIRECT[info.var].Get)
+		if ok then return v end
+		return nil
+	end
 	local ok, v = pcall(info.setting.GetValue, info.setting)
 	if ok then return v end
 end
@@ -200,6 +236,9 @@ function QT:OptionAvailable(info)
 	if info.restart then
 		return false, "only takes effect after restarting the game, so it can't be a quick toggle"
 	end
+	if info.backing == "direct" then
+		return DIRECT[info.var].Available()
+	end
 	if info.backing == "proxy" and not self:DB().allowProxy then
 		return false, "runs Blizzard code to apply; tick 'Allow settings that run Blizzard code' in the Quick Toggle menu to use it"
 	end
@@ -220,6 +259,10 @@ local function Apply(info, value)
 		local s
 		if type(cv) == "boolean" then s = cv and "1" or "0" else s = tostring(cv) end
 		ok = pcall(SetCVar, info.var, s)
+	elseif info.backing == "direct" then
+		local okA = DIRECT[info.var].Available()
+		if not okA then return false end
+		ok = pcall(DIRECT[info.var].Set, value)
 	else
 		if InCombatLockdown and InCombatLockdown() then
 			QT.Print(info.name .. ": can't be changed in combat (it runs Blizzard code).")
@@ -251,6 +294,28 @@ local function Abbrev(name)
 	local w = words[1] or "?"
 	return w:sub(1, 1):upper() .. w:sub(2, 2):lower()
 end
+
+-- What a dropdown's minimap button shows: the current choice, shortened to fit the disc.
+--   "HD" / "SD" / "2x"            short labels stay as they are
+--   "Medium (Med)"                a short code in brackets wins
+--   "High Definition" -> "HD"     several words: their initials
+--   "Never" -> "N"                one long word: its first letter
+local function ChoiceAbbrev(label)
+	label = tostring(label or "?"):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+	local code = label:match("%((%w%w?%w?)%)")
+	if code then return code end
+	label = label:match("^%s*(.-)%s*$")
+	if #label <= 3 and not label:find("%s") then return label end
+	local words = {}
+	for w in label:gmatch("[%w]+") do words[#words + 1] = w end
+	if #words >= 2 then
+		local s = ""
+		for i = 1, math.min(3, #words) do s = s .. words[i]:sub(1, 1):upper() end
+		return s
+	end
+	return ((words[1] or "?"):sub(1, 1):upper())
+end
+QT.ChoiceAbbrev = ChoiceAbbrev
 
 local nextBubbleAngle = 180
 
@@ -304,8 +369,14 @@ function QT:EnsureOption(info, kind)
 				b.cross:SetPoint("CENTER", disc, "CENTER", 0, 0)
 				b.cross:Hide()
 			end
+			-- On/off: the setting's initials, red X while off. Dropdown: the current choice.
 			common.Update = function(b, v)
-				if info.kind == "toggle" and v == false then b.cross:Show() else b.cross:Hide() end
+				if info.kind == "toggle" then
+					if v == false then b.cross:Show() else b.cross:Hide() end
+				else
+					b.label:SetText(ChoiceAbbrev(Describe(info, v)))
+					b.cross:Hide()
+				end
 			end
 			self:Register(common)
 		else
@@ -528,11 +599,6 @@ local function RegisterAddOnPage()
 	Add("QuickToggle_AllowProxy", "allowProxy", db, "Allow settings that run Blizzard code",
 		false, "About a third of the Options settings (graphics presets, action bars, nameplates, voice chat and others) apply by running Blizzard's own code. Changing those from an addon can cause 'Interface action blocked' errors, mostly after combat. Tick to allow them anyway; they are never changed in combat.",
 		function() QT:SetAllowProxy(db.allowProxy, true) end)
-	if QT.byKey.sdhd then
-		Add("QuickToggle_SDHD", "enabled", QT:Settings("sdhd"), "SD / HD minimap button",
-			true, "The round minimap button that switches character models between SD and HD.",
-			function() QT:Refresh() end)
-	end
 	Settings.RegisterAddOnCategory(category)
 	QT.optionsCategory = category
 end
@@ -545,7 +611,21 @@ function QT:OpenOptions()
 	end
 end
 
+-- 2.0 and earlier had a hand-made SD/HD minimap button. The Options window's Character
+-- Models setting replaces it: keep it on the minimap, at the same spot, if it was on.
+local function MigrateSDHD()
+	local db = QT:DB()
+	local old = db.buttons.sdhd
+	if not old then return end
+	local key = "PROXY_CHARACTER_MODELS_TOGGLE@bubble"
+	if old.enabled ~= false and not db.buttons[key] then
+		db.buttons[key] = { enabled = true, angle = old.angle }
+	end
+	db.buttons.sdhd = nil
+end
+
 function QT:OnLoaded()
+	MigrateSDHD()
 	local ok, err = pcall(RegisterAddOnPage)
 	if not ok and self.debug then self.Print("options page: " .. tostring(err)) end
 end

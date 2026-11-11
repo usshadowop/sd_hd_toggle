@@ -20,36 +20,21 @@ end
 
 Stub.LoadAddon(addonDir, "QuickToggle")
 local QT = QuickToggle
-local sd = QuickToggle_sdhd_Button
 local mu = QuickToggle_music_Button
 
--- Load: two toggles registered, both buttons on the minimap ring.
-eq(#QT.toggles, 2, "two toggles registered")
-eq(QT.toggles[1].key, "sdhd", "SD/HD registered first")
-eq(QT.toggles[2].key, "music", "Music registered second")
-eq(sd:IsShown(), true, "SD/HD button shown on login")
+-- Load: the hand-made music button on the minimap ring. The old hand-made SD/HD button is
+-- gone: the Options window's Character Models setting covers it (see the Options section).
+eq(#QT.toggles, 1, "one hand-made minimap button registered")
+eq(QT.toggles[1].key, "music", "it is Music")
+eq(QT.all.sdhd, nil, "no hand-made SD/HD button any more")
+eq(_G.QuickToggle_sdhd_Button, nil, "and no frame for it")
 eq(mu:IsShown(), true, "Music button shown on login")
-eq(sd.parent, Minimap, "buttons are children of the Minimap")
-check(sd.ring.texture:find("TrackingBorder") ~= nil, "buttons have the standard minimap ring")
-eq(QuickToggleDB.buttons.sdhd.enabled, true, "SD/HD saved as enabled by default")
+eq(mu.parent, Minimap, "buttons are children of the Minimap")
+check(mu.ring.texture:find("TrackingBorder") ~= nil, "buttons have the standard minimap ring")
 eq(QuickToggleDB.buttons.music.enabled, true, "Music saved as enabled by default")
-onRing(sd, 220, 75, "SD/HD sits at 220 degrees, half the minimap width + 5 out")
-onRing(mu, 200, 75, "Music sits at 200 degrees, next to it")
+onRing(mu, 200, 75, "Music sits at 200 degrees, half the minimap width + 5 out")
 Minimap:SetSize(250, 250)
-onRing(sd, 220, 130, "a bigger minimap pushes SD/HD out to its edge")
 onRing(mu, 200, 130, "a bigger minimap pushes Music out to its edge")
-
--- SD/HD: yellow text label, click flips through C_GameRules.
-eq(sd.label:GetText(), "HD", "SD/HD label reads HD while HD models are active")
-check(sd.label.color[1] == 1 and sd.label.color[3] == 0, "SD/HD label is yellow")
-sd.scripts.OnClick(sd, "LeftButton")
-eq(Stub.game.sd, true, "click switches the game to SD")
-eq(sd.label:GetText(), "SD", "label follows the switch")
-eq(Stub.game.setCalls[1][2], 3, "reports usage location OptionsMenu")
-check(Stub.LastPrint():find("SD %(classic%)") ~= nil, "announces the switch")
-sd.scripts.OnClick(sd, "LeftButton")
-eq(Stub.game.sd, false, "second click switches back to HD")
-eq(#Stub.sounds, 2, "a sound per flip")
 
 -- Music: yellow note, red X overlaid while off, drives Sound_EnableMusic.
 check(mu.noteHead and mu.noteStem and mu.noteFlag, "note drawn from head, stem and flag")
@@ -64,6 +49,7 @@ check(Stub.LastPrint():find("music off") ~= nil, "announces music off")
 mu.scripts.OnClick(mu, "LeftButton")
 eq(Stub.cvars.Sound_EnableMusic, "1", "second click turns music on")
 eq(mu.cross:IsShown(), false, "red X hidden again")
+eq(#Stub.sounds, 2, "a sound per flip")
 
 -- Music changed elsewhere (Blizzard's hotkey, Options): CVAR_UPDATE updates the button at once.
 SetCVar("Sound_EnableMusic", "0")
@@ -71,13 +57,13 @@ eq(mu.cross:IsShown(), true, "external cvar change shows the red X without waiti
 SetCVar("Sound_EnableMusic", "1")
 eq(mu.cross:IsShown(), false, "and hides it again")
 
--- SD/HD changed elsewhere: no event exists, the poll catches it.
-Stub.game.sd = true
+-- Changed with no event at all: the poll catches it.
+Stub.cvars.Sound_EnableMusic = "0"
 Stub.Tick(0.3)
-eq(sd.label:GetText(), "HD", "label unchanged before the poll interval")
+eq(mu.cross:IsShown(), false, "unchanged before the poll interval")
 Stub.Tick(0.3)
-eq(sd.label:GetText(), "SD", "label corrected after the poll interval")
-Stub.game.sd = false
+eq(mu.cross:IsShown(), true, "corrected after the poll interval")
+Stub.cvars.Sound_EnableMusic = "1"
 Stub.Tick(0.6)
 
 -- Tooltips.
@@ -87,8 +73,6 @@ Stub.cvars.Sound_EnableAllSound = "0"
 mu.scripts.OnEnter(mu)
 check(GameTooltip.lines[#GameTooltip.lines - 1]:find("All sound is off") ~= nil, "music tooltip warns when all sound is off")
 Stub.cvars.Sound_EnableAllSound = "1"
-sd.scripts.OnEnter(sd)
-check(GameTooltip.lines[1] == "SD / HD character models", "SD/HD tooltip titled")
 mu.scripts.OnLeave(mu)
 
 -- Slash commands.
@@ -98,85 +82,81 @@ Stub.Slash("music off")
 check(Stub.LastPrint():find("already") ~= nil, "/qt music off twice says already")
 Stub.Slash("music")
 eq(Stub.cvars.Sound_EnableMusic, "1", "bare /qt music flips")
-Stub.Slash("sdhd sd")
-eq(Stub.game.sd, true, "/qt sdhd sd")
-Stub.Slash("sdhd hd")
-eq(Stub.game.sd, false, "/qt sdhd hd")
-Stub.Slash("sdhd purple")
+Stub.Slash("music purple")
 check(Stub.LastPrint():find("don't know") ~= nil, "unknown value is reported")
+Stub.Slash("sdhd")
+check(Stub.LastPrint():find("commands:") ~= nil, "/qt sdhd is gone")
 Stub.Slash("bogus")
 check(Stub.LastPrint():find("commands:") ~= nil, "unknown command prints help")
 
 Stub.Slash("disable music")
 eq(mu:IsShown(), false, "/qt disable music hides the button")
 eq(QuickToggleDB.buttons.music.enabled, false, "and saves it")
-eq(sd:IsShown(), true, "SD/HD unaffected")
 Stub.Slash("enable music")
 eq(mu:IsShown(), true, "/qt enable music shows it again")
 Stub.Slash("disable nothing")
 check(Stub.LastPrint():find("no toggle") ~= nil, "disable of unknown toggle is reported")
 
 Stub.Slash("hide")
-eq(sd:IsShown() or mu:IsShown(), false, "/qt hide hides every button")
+eq(mu:IsShown(), false, "/qt hide hides every button")
 Stub.Slash("show")
-eq(sd:IsShown() and mu:IsShown(), true, "/qt show brings them back")
+eq(mu:IsShown(), true, "/qt show brings them back")
 
 local n = #Stub.printed
 Stub.Slash("list")
-eq(#Stub.printed - n, 5, "/qt list prints one line per button and slider")
-check(Stub.printed[n + 2]:find("Music") ~= nil and Stub.printed[n + 2]:find("music on") ~= nil, "list shows the music state")
+eq(#Stub.printed - n, 4, "/qt list prints one line per button and slider")
+check(Stub.printed[n + 1]:find("Music") ~= nil and Stub.printed[n + 1]:find("music on") ~= nil, "list shows the music state")
 
 -- Key bindings.
 QuickToggle_Press("music")
 eq(Stub.cvars.Sound_EnableMusic, "0", "binding flips music")
-QuickToggle_Press("sdhd")
-eq(Stub.game.sd, true, "binding flips SD/HD")
+QuickToggle_Press("music")
 Stub.Slash("key music F11")
 eq(Stub.bindings["F11"], "QUICKTOGGLE_MUSIC", "/qt key binds the toggle's action")
 eq(Stub.savedBindings, true, "bindings are saved")
+Stub.Slash("key sdhd F12")
+check(Stub.LastPrint():find("usage") ~= nil, "the old SD/HD binding is gone")
 Stub.Slash("key nothing F12")
 check(Stub.LastPrint():find("usage") ~= nil, "bad key command prints usage")
 
--- Dragging slides each button independently around the ring.
+-- Dragging slides a button around the ring.
 Stub.cursor.x, Stub.cursor.y = 1000, 800
 mu.scripts.OnDragStart(mu)
 mu.scripts.OnUpdate(mu, 0.016)
 mu.scripts.OnDragStop(mu)
 near(QuickToggleDB.buttons.music.angle, 90, "music drag sets its angle from the cursor (90 = top)")
-eq(QuickToggleDB.buttons.sdhd.angle, 220, "SD/HD angle untouched by the music drag")
 onRing(mu, 90, 130, "music now sits at the top of the ring")
 check(mu.scripts.OnUpdate == nil, "drag stop removes the OnUpdate")
 Stub.Slash("lock")
-sd.scripts.OnDragStart(sd)
-check(sd.scripts.OnUpdate == nil, "locked buttons do not drag")
+mu.scripts.OnDragStart(mu)
+check(mu.scripts.OnUpdate == nil, "locked buttons do not drag")
 Stub.Slash("unlock")
 Stub.Slash("reset")
 eq(QuickToggleDB.buttons.music.angle, 200, "/qt reset puts music back at its default angle")
 
 -- The menu (no MenuUtil in the stub, so the fallback frame is exercised).
 eq(MenuUtil, nil, "stub has no MenuUtil, fallback menu in use")
-sd.scripts.OnClick(sd, "RightButton")
+mu.scripts.OnClick(mu, "RightButton")
 local menu = QuickToggleMenu
 check(menu and menu:IsShown(), "right-click opens the menu")
-eq(#menu.rows, 5, "one menu row per button and slider")
-eq(menu.rows[1].label:GetText(), "SD / HD character models", "row 1 is SD/HD")
-eq(menu.rows[2].label:GetText(), "Music", "row 2 is Music")
-eq(menu.rows[2]:GetChecked(), true, "music row ticked while enabled")
-menu.rows[2]:SetChecked(false)
-menu.rows[2].scripts.OnClick(menu.rows[2])
+eq(#menu.rows, 4, "one menu row per button and slider")
+eq(menu.rows[1].label:GetText(), "Music", "row 1 is Music")
+eq(menu.rows[1]:GetChecked(), true, "music row ticked while enabled")
+menu.rows[1]:SetChecked(false)
+menu.rows[1].scripts.OnClick(menu.rows[1])
 eq(mu:IsShown(), false, "unticking Music in the menu hides its button")
 eq(QuickToggleDB.buttons.music.enabled, false, "and saves it")
-menu.rows[2]:SetChecked(true)
-menu.rows[2].scripts.OnClick(menu.rows[2])
+menu.rows[1]:SetChecked(true)
+menu.rows[1].scripts.OnClick(menu.rows[1])
 eq(mu:IsShown(), true, "ticking it again shows the button")
 menu.lock:SetChecked(true)
 menu.lock.scripts.OnClick(menu.lock)
 eq(QuickToggleDB.locked, true, "menu lock row locks the buttons")
 menu.lock:SetChecked(false)
 menu.lock.scripts.OnClick(menu.lock)
-QuickToggleDB.buttons.sdhd.angle = 10
+QuickToggleDB.buttons.music.angle = 10
 menu.reset.scripts.OnClick(menu.reset)
-eq(QuickToggleDB.buttons.sdhd.angle, 220, "menu reset button resets positions")
+eq(QuickToggleDB.buttons.music.angle, 200, "menu reset button resets positions")
 menu.close.scripts.OnClick(menu.close)
 eq(menu:IsShown(), false, "close button hides the menu")
 Stub.Slash("")
@@ -185,32 +165,6 @@ menu:Hide()
 QuickToggle_Press("menu")
 eq(menu:IsShown(), true, "menu key binding opens the menu")
 menu:Hide()
-
--- SD/HD switch turned off on this realm: its button hides, the music one stays, menu row says why.
-Stub.game.toggleEnabled = false
-local before = #Stub.game.setCalls
-sd.scripts.OnClick(sd, "LeftButton")
-eq(#Stub.game.setCalls, before, "no client call when the toggle is disabled")
-check(Stub.LastPrint():find("turned off") ~= nil, "explains that the toggle is off")
-Stub.Fire("PLAYER_LOGIN")
-eq(sd:IsShown(), false, "SD/HD button hidden when the realm disables the switch")
-eq(mu:IsShown(), true, "Music button unaffected")
-QT:OpenMenu()
-check(menu.rows[1].label:GetText():find("turned off") ~= nil, "menu row shows the reason")
-menu:Hide()
-Stub.game.toggleEnabled = true
-QT:Refresh()
-eq(sd:IsShown(), true, "SD/HD button back when the switch is enabled again")
-
--- Client without the API at all: nothing errors.
-local saved = C_GameRules
-C_GameRules = nil
-QT:Refresh()
-eq(sd:IsShown(), false, "SD/HD hidden without the API")
-eq(QT:Press("sdhd"), false, "press returns false without the API")
-check(Stub.LastPrint():find("no SD/HD") ~= nil, "explains the API is missing")
-C_GameRules = saved
-QT:Refresh()
 
 -- Unknown toggle key.
 eq(QT:Press("nope"), false, "unknown toggle returns false")
@@ -309,30 +263,30 @@ eq(menu:IsShown(), false, "left-click on a slider does not open the menu")
 
 -- The menu lists sliders in their own section and can turn each off.
 QT:OpenMenu(panel)
-eq(#menu.rows >= 5, true, "menu has rows for 2 buttons and 3 sliders")
-eq(menu.rows[3].label:GetText(), "Brightness", "row 3 is the brightness slider")
-eq(menu.rows[4].label:GetText(), "Contrast", "row 4 is the contrast slider")
+eq(#menu.rows >= 4, true, "menu has rows for 1 button and 3 sliders")
+eq(menu.rows[2].label:GetText(), "Brightness", "row 2 is the brightness slider")
+eq(menu.rows[3].label:GetText(), "Contrast", "row 3 is the contrast slider")
 eq(menu.headers[1]:GetText(), "Minimap buttons", "buttons section header")
 eq(menu.headers[2]:GetText(), "Slider panel", "slider panel section header")
 check(menu.lock.label:GetText():find("sliders") ~= nil, "lock row covers sliders")
-menu.rows[3]:SetChecked(false)
-menu.rows[3].scripts.OnClick(menu.rows[3])
+menu.rows[2]:SetChecked(false)
+menu.rows[2].scripts.OnClick(menu.rows[2])
 eq(bs:IsShown(), false, "unticking Brightness hides its row")
 eq(cs:IsShown(), true, "contrast row stays")
 eq(panel:IsShown(), true, "panel stays while one slider is left")
 local oneRow = panel.h
+menu.rows[3]:SetChecked(false)
+menu.rows[3].scripts.OnClick(menu.rows[3])
+eq(panel:IsShown(), true, "panel stays while gamma is left")
 menu.rows[4]:SetChecked(false)
 menu.rows[4].scripts.OnClick(menu.rows[4])
-eq(panel:IsShown(), true, "panel stays while gamma is left")
-menu.rows[5]:SetChecked(false)
-menu.rows[5].scripts.OnClick(menu.rows[5])
 eq(panel:IsShown(), false, "panel hides when no slider is enabled")
+menu.rows[2]:SetChecked(true)
+menu.rows[2].scripts.OnClick(menu.rows[2])
 menu.rows[3]:SetChecked(true)
 menu.rows[3].scripts.OnClick(menu.rows[3])
 menu.rows[4]:SetChecked(true)
 menu.rows[4].scripts.OnClick(menu.rows[4])
-menu.rows[5]:SetChecked(true)
-menu.rows[5].scripts.OnClick(menu.rows[5])
 eq(panel:IsShown(), true, "panel back with all sliders")
 check(panel.h > oneRow, "panel grows with a second row")
 local p1 = { QT.panel.rows.contrast.frame:GetPoint(1) }
@@ -382,8 +336,8 @@ Stub.Slash("enable contrast")
 eq(cs:IsShown(), true, "/qt enable contrast shows it")
 local n0 = #Stub.printed
 Stub.Slash("list")
-eq(#Stub.printed - n0, 5, "/qt list covers 2 buttons and 3 sliders")
-check(Stub.printed[n0 + 3]:find("Brightness") and Stub.printed[n0 + 3]:find("now: 50%%"), "list shows the brightness value")
+eq(#Stub.printed - n0, 4, "/qt list covers 1 button and 3 sliders")
+check(Stub.printed[n0 + 2]:find("Brightness") and Stub.printed[n0 + 2]:find("now: 50%%"), "list shows the brightness value")
 
 -- Tooltips.
 bu.scripts.OnEnter(bu)
@@ -414,7 +368,7 @@ QT:RefreshSliders()
 eq(bs:IsShown(), false, "brightness row hidden without the cvar")
 eq(cs:IsShown(), true, "contrast row unaffected")
 QT:OpenMenu(panel)
-check(menu.rows[3].label:GetText():find("no Brightness setting") ~= nil, "menu row shows the reason")
+check(menu.rows[2].label:GetText():find("no Brightness setting") ~= nil, "menu row shows the reason")
 menu:Hide()
 Stub.cvars.Brightness = "50"
 QT:RefreshSliders()
@@ -467,9 +421,9 @@ Stub.Slash("contrast 140")
 check(Stub.LastPrint():find("<0%-100>") ~= nil, "contrast usage still shows 0-100")
 n0 = #Stub.printed
 Stub.Slash("list")
-check(Stub.printed[n0 + 5]:find("Gamma") and Stub.printed[n0 + 5]:find("<0.3%-2.8>") and Stub.printed[n0 + 5]:find("now: 1.0"), "list shows gamma range and value")
+check(Stub.printed[n0 + 4]:find("Gamma") and Stub.printed[n0 + 4]:find("<0.3%-2.8>") and Stub.printed[n0 + 4]:find("now: 1.0"), "list shows gamma range and value")
 QT:OpenMenu(panel)
-eq(menu.rows[5].label:GetText(), "Gamma", "menu row 5 is gamma")
+eq(menu.rows[4].label:GetText(), "Gamma", "menu row 4 is gamma")
 menu:Hide()
 Stub.Slash("disable gamma")
 eq(gs:IsShown(), false, "/qt disable gamma hides its row")
@@ -524,11 +478,17 @@ local iBright = Stub.Init({ setting = sBright, name = "Brightness", options = br
 local iGamma = Stub.Init({ setting = sGammaSet, name = "Gamma", options = gammaOptions })
 local iMusic = Stub.Init({ setting = sMusic, name = "Music" })
 local iTexture = Stub.Init({ setting = sTexture, name = "Texture Resolution", options = textureChoices })
+-- Options > Graphics "Character Models": a proxy (Preset.lua) whose setter calls C_GameRules.
+local sModels = Stub.ProxySetting("PROXY_CHARACTER_MODELS_TOGGLE", "boolean", "Character Models", false)
+local modelChoices = function()
+	return { { value = true, label = "Standard Definition" }, { value = false, label = "High Definition" } }
+end
+local iModels = Stub.Init({ setting = sModels, name = "Character Models", options = modelChoices })
 
 local advanced = Stub.Category("Advanced", { iTexture })
 Stub.categories = {
 	Stub.Category("Gameplay", { iAutoLoot, iTips, iCamera, iSelfCast, iWindowed, iFPS, iButtonRow }),
-	Stub.Category("Graphics", { iBright, iGamma }, { advanced }),
+	Stub.Category("Graphics", { iModels, iBright, iGamma }, { advanced }),
 	Stub.Category("Audio", { iMusic }),
 }
 
@@ -536,7 +496,8 @@ Stub.categories = {
 eq(#Stub.addonCategories, 1, "Quick Toggle page registered under Options > AddOns")
 eq(Stub.addonCategories[1]:GetName(), "Quick Toggle", "page is named Quick Toggle")
 check(Stub.addonSettings.QuickToggle_AllowProxy ~= nil, "page has the 'allow Blizzard code' switch")
-check(Stub.addonSettings.QuickToggle_Locked and Stub.addonSettings.QuickToggle_Shown and Stub.addonSettings.QuickToggle_SDHD, "page has lock, show and SD/HD switches")
+check(Stub.addonSettings.QuickToggle_Locked and Stub.addonSettings.QuickToggle_Shown, "page has lock and show switches")
+eq(Stub.addonSettings.QuickToggle_SDHD, nil, "the old SD/HD switch is gone from the page")
 
 Stub.Fire("SETTINGS_LOADED")
 local infos = QT.optionInfos
@@ -689,7 +650,83 @@ check(tipText:find("shift%-click") ~= nil, "cycle tooltip mentions shift-click")
 cf.scripts.OnLeave(cf)
 cb[2]:SetChecked(true)
 cb[2].scripts.OnClick(cb[2])
-eq(_G["QuickToggle_cameraSmoothStyle_bubble_Button"].label:GetText(), "CFS", "cycle bubble shows initials")
+local cbub = _G["QuickToggle_cameraSmoothStyle_bubble_Button"]
+eq(cbub.label:GetText(), "A", "dropdown bubble shows the current choice (Always), not the setting's initials")
+cbub.scripts.OnClick(cbub, "LeftButton")
+eq(cbub.label:GetText(), "N", "and follows it (Never)")
+eq(cbub.cross:IsShown(), false, "no red X on a dropdown bubble")
+
+-- Dropdown minimap buttons show the current choice, shortened.
+eq(QT.ChoiceAbbrev("Standard Definition"), "SD", "two words: initials")
+eq(QT.ChoiceAbbrev("High Definition"), "HD", "HD")
+eq(QT.ChoiceAbbrev("HD"), "HD", "short labels stay as they are")
+eq(QT.ChoiceAbbrev("2x"), "2x", "including numbers")
+eq(QT.ChoiceAbbrev("Medium (Med)"), "Med", "a short code in brackets wins")
+eq(QT.ChoiceAbbrev("Never"), "N", "one long word: its first letter")
+eq(QT.ChoiceAbbrev("|cffff0000High Definition|r"), "HD", "colour codes are ignored")
+
+-- Character Models (SD / HD): replaces the old hand-made button.
+local im = infos.PROXY_CHARACTER_MODELS_TOGGLE
+eq(im and im.kind, "cycle", "Character Models read as a dropdown")
+eq(im.backing, "direct", "applied through C_GameRules, not Blizzard's setter")
+local rcm = Stub.ShowRow(iModels)
+local cmb = Boxes(rcm)
+eq(QuickToggleDB.allowProxy, false, "(Blizzard code not allowed)")
+eq(cmb[1]:IsEnabled() and cmb[2]:IsEnabled(), true, "Character Models boxes work without the Blizzard-code switch")
+cmb[2]:SetChecked(true)
+cmb[2].scripts.OnClick(cmb[2])
+local cm = _G["QuickToggle_PROXY_CHARACTER_MODELS_TOGGLE_bubble_Button"]
+check(cm and cm:IsShown(), "Character Models minimap button added")
+eq(cm.label:GetText(), "HD", "shows HD while HD models are active")
+check(cm.label.color[1] == 1 and cm.label.color[3] == 0, "in yellow")
+eq(cm.cross:IsShown(), false, "no red X")
+local nProxy, nSet = #Stub.proxyCalls, #Stub.game.setCalls
+cm.scripts.OnClick(cm, "LeftButton")
+eq(Stub.game.sd, true, "click switches to SD")
+eq(cm.label:GetText(), "SD", "and shows SD")
+local lastSet = Stub.game.setCalls[#Stub.game.setCalls]
+eq(tostring(lastSet[1]) .. "/" .. lastSet[2], "true/3", "SetSDHDToggleValue(true, OptionsMenu)")
+eq(#Stub.proxyCalls, nProxy, "Blizzard's proxy setter is never run")
+check(Stub.LastPrint():find("Standard Definition") ~= nil, "announces Standard Definition")
+cm.scripts.OnClick(cm, "LeftButton")
+eq(Stub.game.sd, false, "and back to HD")
+eq(cm.label:GetText(), "HD", "shows HD")
+Stub.game.sd = true
+Stub.Tick(0.6)
+eq(cm.label:GetText(), "SD", "follows a change made in the Barbershop (poll)")
+Stub.game.sd = false
+Stub.Tick(0.6)
+cmb[1]:SetChecked(true)
+cmb[1].scripts.OnClick(cmb[1])
+local cmf = _G["QuickToggle_PROXY_CHARACTER_MODELS_TOGGLE_float_Float"]
+eq(cmf.text:GetText(), "Character Models: High Definition", "floating button shows the choice in full")
+cmf.scripts.OnClick(cmf, "LeftButton")
+eq(cmf.text:GetText(), "Character Models: Standard Definition", "and follows it")
+eq(cm.label:GetText(), "SD", "the minimap button follows the floating one")
+cmf.scripts.OnClick(cmf, "LeftButton")
+Stub.game.toggleEnabled = false
+QT:Refresh()
+QT:RefreshOptionBoxes()
+eq(cm:IsShown() or cmf:IsShown(), false, "hidden when the realm turns the switch off")
+eq(cmb[2]:IsEnabled(), false, "boxes grey out")
+cmb[2].scripts.OnEnter(cmb[2])
+check(table.concat(GameTooltip.lines, " "):find("turned off") ~= nil, "tooltip says the switch is off")
+cmb[2].scripts.OnLeave(cmb[2])
+nSet = #Stub.game.setCalls
+QT:Press("PROXY_CHARACTER_MODELS_TOGGLE@bubble")
+eq(#Stub.game.setCalls, nSet, "no client call while it is off")
+Stub.game.toggleEnabled = true
+QT:Refresh()
+QT:RefreshOptionBoxes()
+eq(cm:IsShown(), true, "back when the switch is on again")
+local savedGR = C_GameRules
+C_GameRules = nil
+QT:Refresh()
+eq(cm:IsShown(), false, "hidden on a client without the API")
+eq(QT:Press("PROXY_CHARACTER_MODELS_TOGGLE@bubble"), false, "and does nothing")
+check(Stub.LastPrint():find("no SD/HD model switch") ~= nil, "says why")
+C_GameRules = savedGR
+QT:Refresh()
 
 -- Proxy setting: greyed until allowed, never in combat.
 local rs = Stub.ShowRow(iSelfCast)
@@ -873,6 +910,9 @@ Stub.Slash("blizzard off")
 -------------------------------------------------------------------------------
 -- /reload: ticked controls come back
 -------------------------------------------------------------------------------
+-- An old hand-made SD/HD button (2.0 and earlier) becomes the Character Models button.
+QuickToggleDB.buttons["PROXY_CHARACTER_MODELS_TOGGLE@bubble"] = nil
+QuickToggleDB.buttons.sdhd = { enabled = true, angle = 123 }
 local savedDB = QuickToggleDB
 local keep = { UIParent, Minimap }
 Stub.frames = keep
@@ -893,7 +933,12 @@ eq(_G["QuickToggle_PROXY_SELF_CAST_float_Float"]:IsShown(), false, "but stays hi
 local rr = Stub.ShowRow(iAutoLoot)
 local rrb = Boxes(rr)
 eq(rrb[1]:GetChecked() and rrb[2]:GetChecked(), true, "boxes in the Options window show the restored state")
-eq(#QT2.floats, 5, "all five ticked floating buttons restored")
+eq(#QT2.floats, 6, "all six ticked floating buttons restored")
+local cm2 = _G["QuickToggle_PROXY_CHARACTER_MODELS_TOGGLE_bubble_Button"]
+check(QT2.all["PROXY_CHARACTER_MODELS_TOGGLE@bubble"] and cm2:IsShown(), "old SD/HD button carried over as the Character Models button")
+eq(QuickToggleDB.buttons["PROXY_CHARACTER_MODELS_TOGGLE@bubble"].angle, 123, "at the same spot on the ring")
+eq(QuickToggleDB.buttons.sdhd, nil, "old entry removed")
+eq(cm2.label:GetText(), "HD", "showing HD")
 local nFloats, nBlocks, nBubbles = #QT2.floats, #QT2.blocks, #QT2.toggles
 Stub.Fire("SETTINGS_LOADED")
 eq(#QT2.floats .. "/" .. #QT2.blocks .. "/" .. #QT2.toggles, nFloats .. "/" .. nBlocks .. "/" .. nBubbles, "a second settings-loaded event creates no duplicates")

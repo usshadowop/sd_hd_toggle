@@ -8,8 +8,16 @@ row. Tick one and that setting gets a quick control:
 | Setting type | First box | Second box (blue) |
 |---|---|---|
 | On/off (checkbox) | a **floating button**: yellow name, green check when on, red X when off | a **minimap button**: round, initials in yellow, red X over it when off |
-| Dropdown (Low / Medium / High...) | a **floating button** showing the current choice: click for the next, shift-click to go back | a **minimap button**: click for the next choice |
+| Dropdown (Low / Medium / High...) | a **floating button** showing the setting and its current choice: click for the next, shift-click to go back | a **minimap button** showing the current choice, shortened: click for the next |
 | Slider | a **floating slider**: its own small block you can put anywhere | a row in the **shared slider panel**, with your other sliders |
+
+On a dropdown's minimap button the current choice is shortened to fit: short labels stay as
+they are, several words become their initials ("High Definition" shows **HD**, "Standard
+Definition" shows **SD**), and one long word shows its first letter. On/off minimap buttons
+show the setting's initials with the red X while off.
+
+**Character Models** (Options > Graphics) is the SD / HD switch: tick its blue box for a
+minimap button that reads HD or SD and switches every character model on a click.
 
 Rows that combine a checkbox with a slider or dropdown get a second pair of boxes at the
 row's right edge for the slider or dropdown part. Hover any box to see what it does.
@@ -20,9 +28,6 @@ setting in Options and the control updates.
 
 The hand-made controls from earlier versions are still here and plug into the same boxes:
 
-- **SD / HD** minimap button: yellow HD or SD text, switches every character model. This one
-  isn't in the Options window; turn it on or off from the right-click menu or Options > AddOns >
-  Quick Toggle.
 - **Music** minimap button: a yellow note with a red X over it while music is off. It is what
   the Music row's minimap box in Options > Audio controls.
 - **Brightness, Contrast and Gamma** rows in the shared slider panel. They are what those rows'
@@ -39,7 +44,8 @@ commit for 1.60.1.70862, Nov 7 2026).
    (the folder must be named `QuickToggle`, the same as the `.toc` file).
 2. Restart the game or `/reload`.
 
-Your earlier Quick Toggle settings carry over, undo points included.
+Your earlier Quick Toggle settings carry over, undo points included. If you had the old SD/HD
+minimap button, it becomes the Character Models minimap button at the same spot.
 
 ## Use
 
@@ -54,8 +60,8 @@ Your earlier Quick Toggle settings carry over, undo points included.
 | Drag a button, block or the panel | move it (minimap buttons slide around the ring) |
 | Right-click any control, or `/qt` | the menu: every control you've added, by kind, with a tick to show or hide each; lock; reset positions; allow settings that run Blizzard code; a button to open Options and add more |
 
-Options > AddOns > Quick Toggle has the same main switches: show everything, lock, allow
-settings that run Blizzard code, and the SD/HD minimap button.
+Options > AddOns > Quick Toggle has the same main switches: show everything, lock, and allow
+settings that run Blizzard code.
 
 Chat commands:
 
@@ -63,8 +69,8 @@ Chat commands:
 |---|---|
 | `/qt` | open the menu |
 | `/qt options` | open the Options window at Quick Toggle's page |
-| `/qt music`, `/qt sdhd`, `/qt <key>` | flip a button's setting from chat; `/qt list` shows every key |
-| `/qt music on\|off`, `/qt sdhd sd\|hd` | set it to a specific value |
+| `/qt music`, `/qt <key>` | flip a button's setting from chat; `/qt list` shows every key |
+| `/qt music on\|off` | set it to a specific value |
 | `/qt brightness 60`, `/qt gamma 1.2`, `/qt <slider key> <value>` | set a slider (undoable) |
 | `/qt brightness undo`, `/qt <slider key> undo` | undo |
 | `/qt enable <key>`, `/qt disable <key>` | show or hide one control |
@@ -91,6 +97,9 @@ About 300 settings in Forever's Options window are quick-toggle candidates:
   usually in combat. So their boxes are greyed out until you tick **Allow settings that run
   Blizzard code** (right-click menu, Options > AddOns > Quick Toggle, or `/qt blizzard on`).
   Even then they are never changed in combat; the control says so and does nothing.
+- **Character Models is the exception**: it is a proxy setting, but its Blizzard setter only
+  calls `C_GameRules.SetSDHDToggleValue`, so Quick Toggle makes that call itself (the same one
+  the Barbershop checkbox makes) and it works without the switch.
 - **Settings that only apply after a restart** (display mode, resolution, anything Blizzard
   marks `ClientRestart`, `GxRestart`, `UIReload` or `UpdateWindow`) have greyed boxes. A quick
   toggle can't apply them.
@@ -134,11 +143,12 @@ Files:
 | `Floating.lua` | floating buttons |
 | `Sliders.lua` | the shared slider panel, floating slider blocks, undo |
 | `Options.lua` | reading the Options window's settings, the boxes in each row, the "Blizzard code" switch, the Options > AddOns page |
-| `Toggles/SDHD.lua`, `Toggles/Music.lua`, `Sliders/Display.lua` | the hand-made controls |
+| `Toggles/Music.lua`, `Sliders/Display.lua` | the hand-made controls |
 
-**SD / HD** uses `C_GameRules.IsSDHDToggleEnabled()`, `AccountHasSDEnabled()` and
+**Character Models** uses `C_GameRules.IsSDHDToggleEnabled()`, `AccountHasSDEnabled()` and
 `SetSDHDToggleValue(setToSD, Enum.SdToggleUsageLocationUI.OptionsMenu)`, the same calls
-Blizzard's Barbershop checkbox makes. **Music** is the `Sound_EnableMusic` CVar.
+Blizzard's Options and Barbershop make (the `DIRECT` table in `Options.lua`). **Music** is the
+`Sound_EnableMusic` CVar.
 **Brightness, Contrast, Gamma** are the `Brightness`, `Contrast` (0 to 100) and `Gamma`
 (0.3 to 2.8 in 0.1 steps) CVars behind Options > Graphics.
 
@@ -167,5 +177,5 @@ It needs `lua5.1` on PATH or `pip install lupa`.
 - **Settings that apply differently from an addon.** A few CVar settings also have Blizzard
   code that runs only when changed from the Options window. Those change correctly from a quick
   toggle but may need a moment, or a zone change, to show. Tell me which ones and I'll look.
-- **SD / HD**: whether the model swap is instant, and whether your realm has the switch enabled
-  (`/qt list` tells you).
+- **Character Models**: whether the model swap is instant. If the realm has the switch off, its
+  boxes are greyed and the tooltip says so.
